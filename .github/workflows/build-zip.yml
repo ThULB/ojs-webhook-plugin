@@ -1,0 +1,95 @@
+# Builds an installable ZIP of the webhook plugin.
+#
+# - Packages only the files needed at runtime (see PLUGIN_FILES below) into
+#   webhook-<version>.zip, with "webhook/" as the archive's top-level folder
+#   so it can be extracted directly into plugins/generic/.
+# - Triggers automatically on tags matching "v*" (e.g. v1.2.3.4), and can
+#   also be run manually via workflow_dispatch (no tag/version checks apply
+#   in that case, and no release is created).
+# - On a tag push, verifies that the tag exactly matches "v<release>" from
+#   version.xml before building anything; the job fails otherwise so a
+#   mismatched tag can never produce a release.
+# - Marks the GitHub Release as a prerelease whenever the major version
+#   (the first "<release>" segment) is 0, e.g. 0.9.0.0.
+# - Uploads the ZIP as a workflow artifact (kept for 1 year) and, on tag
+#   pushes, attaches it to the matching GitHub Release.
+name: Build plugin ZIP
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch: {}
+
+env:
+  PLUGIN_NAME: webhook
+  # Files/directories that make up the installable plugin.
+  # Adjust this list if files are added/removed - everything else
+  # (.git, .github, README.md, ...) is intentionally excluded.
+  PLUGIN_FILES: >-
+    WebhookPlugin.php
+    WebhookSettingsForm.php
+    SendWebhookJob.php
+    settings.xml
+    version.xml
+    templates
+    locale
+    LICENSE
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Determine version
+        id: version
+        run: |
+          VERSION=$(sed -n 's:.*<release>\(.*\)</release>.*:\1:p' version.xml)
+          if [ -z "${VERSION}" ]; then
+            echo "::error::Could not read <release> from version.xml"
+            exit 1
+          fi
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+          MAJOR=$(echo "${VERSION}" | cut -d. -f1)
+          if [ "${MAJOR}" -lt 1 ]; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Verify tag matches version.xml
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          EXPECTED="v${{ steps.version.outputs.version }}"
+          if [ "${TAG}" != "${EXPECTED}" ]; then
+            echo "::error::Tag '${TAG}' does not match version.xml (expected '${EXPECTED}')"
+            exit 1
+          fi
+
+      - name: Assemble plugin directory
+        run: |
+          mkdir -p "build/${PLUGIN_NAME}"
+          cp -r ${PLUGIN_FILES} "build/${PLUGIN_NAME}/"
+
+      - name: Create ZIP
+        run: |
+          cd build
+          zip -r "../${PLUGIN_NAME}-${{ steps.version.outputs.version }}.zip" "${PLUGIN_NAME}"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.PLUGIN_NAME }}-${{ steps.version.outputs.version }}
+          path: ${{ env.PLUGIN_NAME }}-*.zip
+          retention-days: 365
+
+      - name: Attach ZIP to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ env.PLUGIN_NAME }}-*.zip
+          prerelease: ${{ steps.version.outputs.prerelease }}
