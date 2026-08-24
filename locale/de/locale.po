@@ -1,0 +1,36 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: \n"
+"Report-Msgid-Bugs-To: \n"
+"Last-Translator: \n"
+"Language-Team: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"POT-Creation-Date: 2019-09-30T06:56:43-07:00\n"
+"PO-Revision-Date: 2019-09-30T06:56:43-07:00\n"
+"Language: \n"
+
+msgid "plugins.generic.webhook.displayName"
+msgstr "Veröffentlichungs-Webhook"
+
+msgid "plugins.generic.webhook.description"
+msgstr "Sendet bei Veröffentlichung einer Einreichung einen HTTP-Webhook mit den Artikel-Metadaten."
+
+msgid "plugins.generic.webhook.description.requiresConfig"
+msgstr "Bitte richten Sie in den Plugin-Einstellungen eine Webhook-URL ein, bevor Sie dieses Plugin aktivieren."
+
+msgid "plugins.generic.webhook.settings.webhookUrl"
+msgstr "Webhook-URL"
+
+msgid "plugins.generic.webhook.settings.webhookUrl.description"
+msgstr "Die URL, an die bei jeder Veröffentlichung einer Einreichung ein HTTP-POST-Request mit den Artikel-Metadaten gesendet wird."
+
+msgid "plugins.generic.webhook.settings.webhookUrl.invalid"
+msgstr "Bitte geben Sie eine gültige Webhook-URL ein."
+
+msgid "plugins.generic.webhook.settings.webhookSecret"
+msgstr "Webhook-Secret (optional)"
+
+msgid "plugins.generic.webhook.settings.webhookSecret.description"
+msgstr "Falls gesetzt, wird dieser Wert bei jedem Request im Header X-Webhook-Secret mitgesendet, damit die Gegenstelle prüfen kann, dass die Anfrage von dieser Zeitschrift stammt."
