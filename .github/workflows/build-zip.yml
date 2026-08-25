@@ -9,10 +9,20 @@
 # - On a tag push, verifies that the tag exactly matches "v<release>" from
 #   version.xml before building anything; the job fails otherwise so a
 #   mismatched tag can never produce a release.
+# - Checks PHP syntax of all .php files and validates the XML config files
+#   before building anything.
+# - After building, verifies that the ZIP actually contains every file/
+#   directory listed in PLUGIN_FILES.
 # - Marks the GitHub Release as a prerelease whenever the major version
 #   (the first "<release>" segment) is 0, e.g. 0.9.0.0.
-# - Uploads the ZIP as a workflow artifact (kept for 1 year) and, on tag
-#   pushes, attaches it to the matching GitHub Release.
+# - On manual (workflow_dispatch) runs, only the checks above and the ZIP
+#   build/verification run; the ZIP is uploaded as a workflow artifact
+#   (kept for 1 year) so it can be downloaded for testing, and no release
+#   is created.
+# - On tag pushes, creates the GitHub Release and attaches the ZIP directly
+#   via the `gh` CLI (preinstalled on the runner) instead of a third-party
+#   action, and skips the workflow-artifact upload since the ZIP already
+#   lives on the release.
 name: Build plugin ZIP
 
 on:
@@ -20,6 +30,9 @@ on:
     tags:
       - 'v*'
   workflow_dispatch: {}
+
+permissions:
+  contents: write
 
 env:
   PLUGIN_NAME: webhook
@@ -42,6 +55,24 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Check PHP syntax
+        run: |
+          for f in *.php; do
+            php -l "$f"
+          done
+
+      - name: Validate XML files
+        run: |
+          for f in settings.xml version.xml; do
+            php -r '
+              $file = $argv[1];
+              if (@simplexml_load_file($file) === false) {
+                fwrite(STDERR, "::error::Invalid XML: {$file}\n");
+                exit(1);
+              }
+            ' "$f"
+          done
 
       - name: Determine version
         id: version
@@ -80,16 +111,38 @@ jobs:
           cd build
           zip -r "../${PLUGIN_NAME}-${{ steps.version.outputs.version }}.zip" "${PLUGIN_NAME}"
 
+      - name: Verify ZIP contents
+        run: |
+          ZIP="${PLUGIN_NAME}-${{ steps.version.outputs.version }}.zip"
+          echo "Contents of ${ZIP}:"
+          unzip -l "${ZIP}"
+
+          MISSING=0
+          for f in ${PLUGIN_FILES}; do
+            if ! unzip -l "${ZIP}" | awk '{print $4}' | grep -qE "^${PLUGIN_NAME}/${f}/?$"; then
+              echo "::error::Expected '${f}' not found in ${ZIP}"
+              MISSING=1
+            fi
+          done
+          if [ "${MISSING}" -eq 1 ]; then
+            exit 1
+          fi
+
       - name: Upload artifact
+        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.PLUGIN_NAME }}-${{ steps.version.outputs.version }}
           path: ${{ env.PLUGIN_NAME }}-*.zip
           retention-days: 365
 
-      - name: Attach ZIP to GitHub Release
+      - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: ${{ env.PLUGIN_NAME }}-*.zip
-          prerelease: ${{ steps.version.outputs.prerelease }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          RELEASE_ARGS=(--title "${GITHUB_REF_NAME}" --generate-notes)
+          if [ "${{ steps.version.outputs.prerelease }}" = "true" ]; then
+            RELEASE_ARGS+=(--prerelease)
+          fi
+          gh release create "${GITHUB_REF_NAME}" "${PLUGIN_NAME}"-*.zip "${RELEASE_ARGS[@]}"
