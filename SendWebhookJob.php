@@ -79,6 +79,10 @@ class SendWebhookJob extends BaseJob
             CURLOPT_HTTPHEADER => $headers,
             CURLOPT_CONNECTTIMEOUT => 5,
             CURLOPT_TIMEOUT => 15,
+            // Defense in depth: WebhookPlugin/WebhookSettingsForm already restrict
+            // the configured URL to http(s), but enforce it here too in case that
+            // check is ever bypassed (e.g. a value written directly to the DB).
+            CURLOPT_PROTOCOLS => CURLPROTO_HTTP | CURLPROTO_HTTPS,
         ]);
 
         $result = curl_exec($ch);

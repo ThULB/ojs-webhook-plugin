@@ -40,6 +40,7 @@ class WebhookSettingsForm extends Form
             'optional',
             'plugins.generic.webhook.settings.webhookUrl.invalid',
             fn (string $value): bool => filter_var($value, FILTER_VALIDATE_URL) !== false
+                && in_array(parse_url($value, PHP_URL_SCHEME), ['http', 'https'], true)
         ));
     }
 
