@@ -9,6 +9,8 @@
 # - On a tag push, verifies that the tag exactly matches "v<release>" from
 #   version.xml before building anything; the job fails otherwise so a
 #   mismatched tag can never produce a release.
+# - Runs the PHPUnit test suite (see tests.yml) as a prerequisite job; the
+#   build job only starts once it's green.
 # - Checks PHP syntax of all .php files and validates the XML config files
 #   before building anything.
 # - After building, verifies that the ZIP actually contains every file/
@@ -43,6 +45,7 @@ env:
   PLUGIN_FILES: >-
     WebhookPlugin.php
     WebhookSettingsForm.php
+    WebhookUrlValidator.php
     SendWebhookJob.php
     settings.xml
     version.xml
@@ -51,7 +54,20 @@ env:
     LICENSE
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist
+
+      - name: Run PHPUnit
+        run: vendor/bin/phpunit
+
   build:
+    needs: test
     runs-on: ubuntu-latest
     steps:
       - name: Checkout

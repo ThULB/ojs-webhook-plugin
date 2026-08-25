@@ -91,15 +91,33 @@ updated configuration (see below).
   notification to the journal manager, only an entry in the job/failure
   logs.
 
+## Development
+
+`WebhookUrlValidator` (the http(s)-only URL check shared by `WebhookPlugin`'s
+enable-gate and `WebhookSettingsForm`'s field validator) has no OJS/PKP
+dependency and is covered by a PHPUnit suite that runs standalone, without an
+OJS installation:
+
+```
+composer install
+vendor/bin/phpunit
+```
+
+The rest of the plugin (event registration, the settings form, the queue job)
+depends on PKP/Laravel classes that only exist inside a running OJS instance
+and is not covered by this suite.
+
 ## Files
 
 ```
 webhook/
 ├── WebhookPlugin.php          Plugin class, event listener, enable gate
 ├── WebhookSettingsForm.php    Settings form (webhook URL/secret)
+├── WebhookUrlValidator.php    Shared http(s) URL validation
 ├── SendWebhookJob.php         Async queue job for the HTTP POST
 ├── settings.xml               Install defaults (enabled = false)
 ├── version.xml                Plugin version information
 ├── templates/settings.tpl     Smarty template for the settings form
-└── locale/{de,en}/locale.po   Translations
+├── locale/{de,en}/locale.po   Translations
+└── tests/                     PHPUnit tests (WebhookUrlValidator only, see Development)
 ```

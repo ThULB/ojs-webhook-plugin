@@ -1,0 +1,21 @@
+{
+    "name": "thulb/ojs-webhook-plugin",
+    "description": "Generic OJS 3.5 plugin that sends an HTTP webhook when an article is published.",
+    "license": "GPL-3.0-or-later",
+    "require": {
+        "php": ">=8.1"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.5"
+    },
+    "autoload": {
+        "psr-4": {
+            "APP\\plugins\\generic\\webhook\\": "."
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "APP\\plugins\\generic\\webhook\\Tests\\": "tests/"
+        }
+    }
+}

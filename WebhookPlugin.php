@@ -83,11 +83,7 @@ class WebhookPlugin extends GenericPlugin
             $contextId = $this->getCurrentContextId();
         }
 
-        $webhookUrl = $this->getSetting($contextId, 'webhookUrl');
-
-        return is_string($webhookUrl)
-            && filter_var($webhookUrl, FILTER_VALIDATE_URL) !== false
-            && in_array(parse_url($webhookUrl, PHP_URL_SCHEME), ['http', 'https'], true);
+        return WebhookUrlValidator::isValid($this->getSetting($contextId, 'webhookUrl'));
     }
 
     /**
