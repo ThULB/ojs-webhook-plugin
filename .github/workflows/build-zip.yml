@@ -16,9 +16,10 @@
 # - Marks the GitHub Release as a prerelease whenever the major version
 #   (the first "<release>" segment) is 0, e.g. 0.9.0.0.
 # - On manual (workflow_dispatch) runs, only the checks above and the ZIP
-#   build/verification run; the ZIP is uploaded as a workflow artifact
-#   (kept for 1 year) so it can be downloaded for testing, and no release
-#   is created.
+#   build/verification run; the assembled plugin directory (not the ZIP
+#   file itself, to avoid a ZIP-in-a-ZIP on download) is uploaded as a
+#   workflow artifact (kept for 1 year) so it can be downloaded for
+#   testing, and no release is created.
 # - On tag pushes, creates the GitHub Release and attaches the ZIP directly
 #   via the `gh` CLI (preinstalled on the runner) instead of a third-party
 #   action, and skips the workflow-artifact upload since the ZIP already
@@ -133,7 +134,14 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.PLUGIN_NAME }}-${{ steps.version.outputs.version }}
-          path: ${{ env.PLUGIN_NAME }}-*.zip
+          # Upload the assembled (unzipped) plugin directory, not the ZIP
+          # built above: actions/upload-artifact always wraps whatever it's
+          # given in its own ZIP on download, so uploading an already-zipped
+          # file would produce a ZIP-in-a-ZIP. Uploading "build/" (which
+          # contains only the "webhook/" folder) lets GitHub's own
+          # packaging be the only ZIP layer, with the correct top-level
+          # "webhook/" folder preserved.
+          path: build
           retention-days: 365
 
       - name: Create GitHub Release
