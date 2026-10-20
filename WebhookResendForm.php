@@ -62,14 +62,14 @@ class WebhookResendForm extends Form
      */
     public function execute(...$functionArgs)
     {
-        $this->plugin->resendWebhook((int) $this->getData('resendSubmissionId'));
+        $queued = $this->plugin->resendWebhook((int) $this->getData('resendSubmissionId'));
 
         $request = Application::get()->getRequest();
         $notificationMgr = new NotificationManager();
         $notificationMgr->createTrivialNotification(
             $request->getUser()->getId(),
-            Notification::NOTIFICATION_TYPE_SUCCESS,
-            ['contents' => __('plugins.generic.webhook.resend.queued')]
+            $queued ? Notification::NOTIFICATION_TYPE_SUCCESS : Notification::NOTIFICATION_TYPE_ERROR,
+            ['contents' => __($queued ? 'plugins.generic.webhook.resend.queued' : 'plugins.generic.webhook.resend.notConfigured')]
         );
 
         return parent::execute(...$functionArgs);

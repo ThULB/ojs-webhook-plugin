@@ -59,6 +59,9 @@ msgstr "No submission with this ID was found in this journal."
 msgid "plugins.generic.webhook.resend.queued"
 msgstr "The webhook has been queued for resending."
 
+msgid "plugins.generic.webhook.resend.notConfigured"
+msgstr "No valid webhook URL is configured for this journal, so nothing was sent. Configure one in the plugin settings first."
+
 msgid "plugins.generic.webhook.status.label"
 msgstr "Webhook status"
 

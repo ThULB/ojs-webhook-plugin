@@ -129,6 +129,9 @@ Enter a submission ID (as shown in its URL) to re-dispatch the webhook for
 that submission's current publication, using whatever `event` was last sent
 for it (or `"updated"` if it was never sent before). Useful after a
 permanently failed delivery, or after fixing the configured webhook URL.
+This action is shown regardless of whether a valid webhook URL is currently
+configured; if none is, nothing is queued and an error notification says so
+rather than falsely reporting success.
 
 ## Requirements
 
@@ -156,10 +159,11 @@ permanently failed delivery, or after fixing the configured webhook URL.
 ## Development
 
 `WebhookUrlValidator` (the http(s)-only URL check shared by `WebhookPlugin`'s
-enable-gate and `WebhookSettingsForm`'s field validator) and `WebhookPayload`
+enable-gate and `WebhookSettingsForm`'s field validator), `WebhookPayload`
 (date formatting, keyword reduction and HMAC signature computation used by
-`SendWebhookJob`) have no OJS/PKP dependency and are covered by a PHPUnit
-suite that runs standalone, without an OJS installation:
+`SendWebhookJob`) and `WebhookStatusFormatter` (warning-code formatting used
+by `WebhookPlugin::formatStatusHtml()`) have no OJS/PKP dependency and are
+covered by a PHPUnit suite that runs standalone, without an OJS installation:
 
 ```
 composer install
@@ -181,11 +185,12 @@ webhook/
 ├── WebhookStatusMigration.php  Creates the webhook_publication_status table
 ├── WebhookUrlValidator.php     Shared http(s) URL validation
 ├── WebhookPayload.php          Pure payload helpers (date format, keywords, HMAC signature)
+├── WebhookStatusFormatter.php  Pure warning-code formatting for the status display
 ├── SendWebhookJob.php          Async queue job for the HTTP POST
 ├── settings.xml                Install defaults (enabled = false)
 ├── version.xml                 Plugin version information
 ├── templates/settings.tpl      Smarty template for the settings form
 ├── templates/resend.tpl        Smarty template for the resend form
 ├── locale/{de,en}/locale.po    Translations
-└── tests/                      PHPUnit tests (WebhookUrlValidator, WebhookPayload; see Development)
+└── tests/                      PHPUnit tests (WebhookUrlValidator, WebhookPayload, WebhookStatusFormatter; see Development)
 ```

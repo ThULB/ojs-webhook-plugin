@@ -155,7 +155,7 @@ class WebhookPlugin extends GenericPlugin
         }
 
         if (!empty($status['warnings'])) {
-            $codes = implode(', ', array_filter(array_map(fn ($warning) => $warning['code'] ?? null, $status['warnings'])));
+            $codes = WebhookStatusFormatter::warningCodes($status['warnings']);
             if ($codes) {
                 $lines[] = __('plugins.generic.webhook.status.warnings', ['warnings' => $codes]);
             }
@@ -172,6 +172,11 @@ class WebhookPlugin extends GenericPlugin
      * Re-dispatch the webhook for a submission's current publication, using
      * whatever event was last sent for it (defaulting to "updated" if it was
      * never sent before). Used by the "resend" action in the plugin grid.
+     *
+     * Returns false if the submission/publication could not be found, or if
+     * no valid webhook URL is configured - the resend action is shown
+     * regardless of whether the plugin has been configured yet, so this must
+     * be checked here rather than assumed.
      */
     public function resendWebhook(int $submissionId): bool
     {
@@ -188,24 +193,25 @@ class WebhookPlugin extends GenericPlugin
         $status = WebhookStatus::get($publication->getId());
         $event = $status['event'] ?? 'updated';
 
-        $this->dispatchWebhook($event, $submission->getData('contextId'), $submissionId, $publication->getId());
-
-        return true;
+        return $this->dispatchWebhook($event, $submission->getData('contextId'), $submissionId, $publication->getId());
     }
 
     /**
-     * Queue a webhook notification for an asynchronous send, if a webhook URL is configured.
+     * Queue a webhook notification for an asynchronous send, if a webhook URL is
+     * configured. Returns whether a job was actually queued.
      */
-    protected function dispatchWebhook(string $event, int $contextId, int $submissionId, int $publicationId): void
+    protected function dispatchWebhook(string $event, int $contextId, int $submissionId, int $publicationId): bool
     {
         if (!$this->hasValidWebhookConfig($contextId)) {
-            return;
+            return false;
         }
 
         $webhookUrl = $this->getSetting($contextId, 'webhookUrl');
         $webhookSecret = $this->getSetting($contextId, 'webhookSecret');
 
         SendWebhookJob::dispatch($event, $submissionId, $publicationId, $webhookUrl, $webhookSecret ?: null);
+
+        return true;
     }
 
     /**

@@ -59,6 +59,9 @@ msgstr "In dieser Zeitschrift wurde keine Einreichung mit dieser ID gefunden."
 msgid "plugins.generic.webhook.resend.queued"
 msgstr "Der Webhook wurde zum erneuten Senden eingereiht."
 
+msgid "plugins.generic.webhook.resend.notConfigured"
+msgstr "Für diese Zeitschrift ist keine gültige Webhook-URL konfiguriert, es wurde daher nichts gesendet. Bitte zuerst in den Plugin-Einstellungen eine URL hinterlegen."
+
 msgid "plugins.generic.webhook.status.label"
 msgstr "Webhook-Status"
 
