@@ -56,6 +56,7 @@ class WebhookSettingsForm extends Form
         $contextId = $this->getContextId();
         $this->setData('webhookUrl', $this->plugin->getSetting($contextId, 'webhookUrl'));
         $this->setData('webhookSecret', $this->plugin->getSetting($contextId, 'webhookSecret'));
+        $this->setData('requireDoiBeforePublish', (bool) $this->plugin->getSetting($contextId, 'requireDoiBeforePublish'));
         parent::initData();
     }
 
@@ -64,7 +65,7 @@ class WebhookSettingsForm extends Form
      */
     public function readInputData()
     {
-        $this->readUserVars(['webhookUrl', 'webhookSecret']);
+        $this->readUserVars(['webhookUrl', 'webhookSecret', 'requireDoiBeforePublish']);
     }
 
     /**
@@ -85,6 +86,7 @@ class WebhookSettingsForm extends Form
         $contextId = $this->getContextId();
         $this->plugin->updateSetting($contextId, 'webhookUrl', trim((string) $this->getData('webhookUrl')));
         $this->plugin->updateSetting($contextId, 'webhookSecret', trim((string) $this->getData('webhookSecret')) ?: null);
+        $this->plugin->updateSetting($contextId, 'requireDoiBeforePublish', (bool) $this->getData('requireDoiBeforePublish'));
 
         $request = Application::get()->getRequest();
         $notificationMgr = new NotificationManager();

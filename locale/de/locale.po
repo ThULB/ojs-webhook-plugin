@@ -20,11 +20,14 @@ msgstr "Sendet bei Veröffentlichung einer Einreichung einen HTTP-Webhook mit de
 msgid "plugins.generic.webhook.description.requiresConfig"
 msgstr "Bitte richten Sie in den Plugin-Einstellungen eine Webhook-URL ein, bevor Sie dieses Plugin aktivieren."
 
+msgid "plugins.generic.webhook.description.doiConfigWarning"
+msgstr "Die DOI-Einstellungen dieser Zeitschrift entsprechen nicht dem, was die Gegenstelle erwartet (DOIs für Publikationen aktiviert, manuell vergeben, nie automatisch erzeugt) - die von dort zurückgemeldete DOI wird möglicherweise nicht korrekt übernommen."
+
 msgid "plugins.generic.webhook.settings.webhookUrl"
 msgstr "Webhook-URL"
 
 msgid "plugins.generic.webhook.settings.webhookUrl.description"
-msgstr "Die URL, an die bei jeder Veröffentlichung einer Einreichung ein HTTP-POST-Request mit den Artikel-Metadaten gesendet wird."
+msgstr "Die URL, an die bei Übergabe in die Herstellung oder Veröffentlichung einer Einreichung ein HTTP-POST-Request mit den Artikel-Metadaten gesendet wird. Bei einem Zeitschriftenserver (MyCoRe) enthält sie dessen eigene Zeitschriften-ID, z. B. https://example.org/rsc/ojs/jportal_jpjournal_00002373."
 
 msgid "plugins.generic.webhook.settings.webhookUrl.invalid"
 msgstr "Bitte geben Sie eine gültige Webhook-URL ein."
@@ -33,4 +36,10 @@ msgid "plugins.generic.webhook.settings.webhookSecret"
 msgstr "Webhook-Secret (optional)"
 
 msgid "plugins.generic.webhook.settings.webhookSecret.description"
-msgstr "Falls gesetzt, wird dieser Wert bei jedem Request im Header X-Webhook-Secret mitgesendet, damit die Gegenstelle prüfen kann, dass die Anfrage von dieser Zeitschrift stammt."
+msgstr "Falls gesetzt, wird jeder Request mit diesem Wert signiert (HMAC-SHA256 über den Request-Body) und im Header X-Webhook-Signature mitgesendet, damit die Gegenstelle prüfen kann, dass die Anfrage von dieser Zeitschrift stammt und unverändert ist. Das Secret selbst wird nie übertragen."
+
+msgid "plugins.generic.webhook.settings.requireDoiBeforePublish"
+msgstr "Veröffentlichen erst zulassen, wenn für die Einreichung eine DOI hinterlegt ist (z. B. aus einer vorherigen Webhook-Antwort)."
+
+msgid "plugins.generic.webhook.validatePublish.missingDoi"
+msgstr "Diese Einreichung kann noch nicht veröffentlicht werden, da noch keine DOI dafür hinterlegt ist."

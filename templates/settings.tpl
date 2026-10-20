@@ -24,6 +24,9 @@
 		{fbvFormSection title="plugins.generic.webhook.settings.webhookSecret" description="plugins.generic.webhook.settings.webhookSecret.description"}
 			{fbvElement type="text" id="webhookSecret" value=$webhookSecret maxlength="255"}
 		{/fbvFormSection}
+		{fbvFormSection list="true"}
+			{fbvElement type="checkbox" id="requireDoiBeforePublish" checked=$requireDoiBeforePublish label="plugins.generic.webhook.settings.requireDoiBeforePublish"}
+		{/fbvFormSection}
 	{/fbvFormArea}
 	{fbvFormButtons}
 </form>

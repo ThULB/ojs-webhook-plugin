@@ -21,6 +21,18 @@ use PKP\jobs\BaseJob;
 
 class SendWebhookJob extends BaseJob
 {
+    /**
+     * The Zeitschriftenserver endpoint is idempotent per submissionId/publicationId,
+     * so retries on top of BaseJob's defaults are safe - widen them to ride out
+     * longer outages of the receiving end.
+     */
+    public $tries = 5;
+
+    public function backoff(): array
+    {
+        return [30, 120, 600, 1800];
+    }
+
     public function __construct(
         protected string $event,
         protected int $submissionId,
@@ -108,9 +120,14 @@ class SendWebhookJob extends BaseJob
                 : null,
         ];
 
+        $body = json_encode($payload);
+
         $headers = ['Content-Type: application/json'];
         if ($this->webhookSecret) {
-            $headers[] = 'X-Webhook-Secret: ' . $this->webhookSecret;
+            // Sign the body instead of sending the secret itself, so it never
+            // crosses the wire and a captured request can't be replayed with a
+            // tampered payload.
+            $headers[] = 'X-Webhook-Signature: sha256=' . hash_hmac('sha256', $body, $this->webhookSecret);
         }
 
         $ch = curl_init();
@@ -118,7 +135,7 @@ class SendWebhookJob extends BaseJob
             CURLOPT_URL => $this->webhookUrl,
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_POST => true,
-            CURLOPT_POSTFIELDS => json_encode($payload),
+            CURLOPT_POSTFIELDS => $body,
             CURLOPT_HTTPHEADER => $headers,
             CURLOPT_USERAGENT => 'OJS-Webhook-Plugin/0.1 (+https://github.com/ThULB/ojs-webhook-plugin)',
             CURLOPT_CONNECTTIMEOUT => 5,
