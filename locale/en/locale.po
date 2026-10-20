@@ -43,3 +43,36 @@ msgstr "Do not allow publishing a submission until a DOI has been recorded for i
 
 msgid "plugins.generic.webhook.validatePublish.missingDoi"
 msgstr "This submission cannot be published yet because no DOI has been recorded for it."
+
+msgid "plugins.generic.webhook.linkAction.resend"
+msgstr "Resend webhook"
+
+msgid "plugins.generic.webhook.resend.submissionId"
+msgstr "Submission ID"
+
+msgid "plugins.generic.webhook.resend.submissionId.description"
+msgstr "The ID of the submission (as shown in its URL) to resend the webhook for. Uses whatever event was last sent for it (production/published/updated/unpublished), or \"updated\" if it was never sent before."
+
+msgid "plugins.generic.webhook.resend.notFound"
+msgstr "No submission with this ID was found in this journal."
+
+msgid "plugins.generic.webhook.resend.queued"
+msgstr "The webhook has been queued for resending."
+
+msgid "plugins.generic.webhook.status.label"
+msgstr "Webhook status"
+
+msgid "plugins.generic.webhook.status.sent"
+msgstr "Successfully sent ({$event}) on {$date}."
+
+msgid "plugins.generic.webhook.status.failed"
+msgstr "Failed to send ({$event}) on {$date}."
+
+msgid "plugins.generic.webhook.status.zsId"
+msgstr "Zeitschriftenserver ID: {$id}"
+
+msgid "plugins.generic.webhook.status.warnings"
+msgstr "Warnings: {$warnings}"
+
+msgid "plugins.generic.webhook.status.error"
+msgstr "Error: {$error}"

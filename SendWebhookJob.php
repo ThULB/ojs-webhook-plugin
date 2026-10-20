@@ -160,7 +160,26 @@ class SendWebhookJob extends BaseJob
             throw new \Exception("Webhook returned HTTP {$statusCode} for submission {$this->submissionId}: {$result}");
         }
 
-        $this->recordDoiFromResponse($publication, $contextId, json_decode((string) $result, true));
+        $response = json_decode((string) $result, true);
+        $this->recordDoiFromResponse($publication, $contextId, $response);
+
+        WebhookStatus::recordSuccess(
+            $this->publicationId,
+            $this->event,
+            $response['id'] ?? null,
+            $response['url'] ?? null,
+            $response['warnings'] ?? []
+        );
+    }
+
+    /**
+     * Called by the queue once all of $tries' attempts are exhausted, so a
+     * permanently failing endpoint shows up as an error on the publication
+     * instead of only in the job/failure logs.
+     */
+    public function failed(\Throwable $exception): void
+    {
+        WebhookStatus::recordFailure($this->publicationId, $this->event, $exception->getMessage());
     }
 
     /**

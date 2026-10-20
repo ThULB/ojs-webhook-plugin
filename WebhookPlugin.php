@@ -8,6 +8,8 @@ use APP\facades\Repo;
 use APP\publication\Publication;
 use APP\submission\Submission;
 use Illuminate\Support\Facades\Event;
+use PKP\components\forms\FieldHTML;
+use PKP\components\forms\FormComponent;
 use PKP\context\Context;
 use PKP\core\JSONMessage;
 use PKP\linkAction\LinkAction;
@@ -117,7 +119,76 @@ class WebhookPlugin extends GenericPlugin
 
                 return Hook::CONTINUE;
             });
+
+            Hook::add('Form::config::before', function (string $hookName, FormComponent $form) {
+                if ($form->id !== 'publicationIdentifiers') {
+                    return;
+                }
+
+                $status = WebhookStatus::get($form->publication->getId());
+                if (!$status) {
+                    return;
+                }
+
+                $form->addField(new FieldHTML('webhookStatus', [
+                    'label' => __('plugins.generic.webhook.status.label'),
+                    'description' => $this->formatStatusHtml($status),
+                ]));
+            });
         }
+
+        return true;
+    }
+
+    /**
+     * Render the last recorded webhook status as the description of a
+     * read-only FieldHTML on the Publication tab's "Identifiers" form.
+     */
+    protected function formatStatusHtml(array $status): string
+    {
+        $lines = [$status['success']
+            ? __('plugins.generic.webhook.status.sent', ['event' => $status['event'], 'date' => $status['sentAt']])
+            : __('plugins.generic.webhook.status.failed', ['event' => $status['event'], 'date' => $status['sentAt']])];
+
+        if ($status['zsId']) {
+            $lines[] = __('plugins.generic.webhook.status.zsId', ['id' => $status['zsId']]);
+        }
+
+        if (!empty($status['warnings'])) {
+            $codes = implode(', ', array_filter(array_map(fn ($warning) => $warning['code'] ?? null, $status['warnings'])));
+            if ($codes) {
+                $lines[] = __('plugins.generic.webhook.status.warnings', ['warnings' => $codes]);
+            }
+        }
+
+        if ($status['error']) {
+            $lines[] = __('plugins.generic.webhook.status.error', ['error' => $status['error']]);
+        }
+
+        return implode('<br>', array_map('htmlspecialchars', $lines));
+    }
+
+    /**
+     * Re-dispatch the webhook for a submission's current publication, using
+     * whatever event was last sent for it (defaulting to "updated" if it was
+     * never sent before). Used by the "resend" action in the plugin grid.
+     */
+    public function resendWebhook(int $submissionId): bool
+    {
+        $submission = Repo::submission()->get($submissionId);
+        if (!$submission || $submission->getData('contextId') !== $this->getCurrentContextId()) {
+            return false;
+        }
+
+        $publication = $submission->getCurrentPublication();
+        if (!$publication) {
+            return false;
+        }
+
+        $status = WebhookStatus::get($publication->getId());
+        $event = $status['event'] ?? 'updated';
+
+        $this->dispatchWebhook($event, $submission->getData('contextId'), $submissionId, $publication->getId());
 
         return true;
     }
@@ -179,6 +250,14 @@ class WebhookPlugin extends GenericPlugin
     }
 
     /**
+     * @copydoc Plugin::getInstallMigration()
+     */
+    public function getInstallMigration()
+    {
+        return new WebhookStatusMigration();
+    }
+
+    /**
      * @copydoc Plugin::getActions()
      */
     public function getActions($request, $actionArgs)
@@ -186,7 +265,28 @@ class WebhookPlugin extends GenericPlugin
         $actions = parent::getActions($request, $actionArgs);
 
         $router = $request->getRouter();
-        $linkAction = new LinkAction(
+        $resendAction = new LinkAction(
+            'resend',
+            new AjaxModal(
+                $router->url(
+                    $request,
+                    null,
+                    null,
+                    'manage',
+                    null,
+                    [
+                        'verb' => 'resend',
+                        'plugin' => $this->getName(),
+                        'category' => 'generic',
+                    ]
+                ),
+                __('plugins.generic.webhook.linkAction.resend')
+            ),
+            __('plugins.generic.webhook.linkAction.resend'),
+            null
+        );
+
+        $settingsAction = new LinkAction(
             'settings',
             new AjaxModal(
                 $router->url(
@@ -207,7 +307,8 @@ class WebhookPlugin extends GenericPlugin
             null
         );
 
-        array_unshift($actions, $linkAction);
+        array_unshift($actions, $resendAction);
+        array_unshift($actions, $settingsAction);
 
         return $actions;
     }
@@ -222,6 +323,19 @@ class WebhookPlugin extends GenericPlugin
                 $form = new WebhookSettingsForm($this);
 
                 if ($request->getUserVar('save')) {
+                    $form->readInputData();
+                    if ($form->validate()) {
+                        $form->execute();
+                        return new JSONMessage(true);
+                    }
+                }
+
+                $form->initData();
+                return new JSONMessage(true, $form->fetch($request));
+            case 'resend':
+                $form = new WebhookResendForm($this);
+
+                if ($request->getUserVar('resend')) {
                     $form->readInputData();
                     if ($form->validate()) {
                         $form->execute();

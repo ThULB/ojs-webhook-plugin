@@ -43,3 +43,36 @@ msgstr "Veröffentlichen erst zulassen, wenn für die Einreichung eine DOI hinte
 
 msgid "plugins.generic.webhook.validatePublish.missingDoi"
 msgstr "Diese Einreichung kann noch nicht veröffentlicht werden, da noch keine DOI dafür hinterlegt ist."
+
+msgid "plugins.generic.webhook.linkAction.resend"
+msgstr "Webhook erneut senden"
+
+msgid "plugins.generic.webhook.resend.submissionId"
+msgstr "Einreichungs-ID"
+
+msgid "plugins.generic.webhook.resend.submissionId.description"
+msgstr "Die ID der Einreichung (aus ihrer URL), für die der Webhook erneut gesendet werden soll. Verwendet das zuletzt gesendete Ereignis (production/published/updated/unpublished), bzw. \"updated\", falls noch nie gesendet wurde."
+
+msgid "plugins.generic.webhook.resend.notFound"
+msgstr "In dieser Zeitschrift wurde keine Einreichung mit dieser ID gefunden."
+
+msgid "plugins.generic.webhook.resend.queued"
+msgstr "Der Webhook wurde zum erneuten Senden eingereiht."
+
+msgid "plugins.generic.webhook.status.label"
+msgstr "Webhook-Status"
+
+msgid "plugins.generic.webhook.status.sent"
+msgstr "Erfolgreich gesendet ({$event}) am {$date}."
+
+msgid "plugins.generic.webhook.status.failed"
+msgstr "Senden fehlgeschlagen ({$event}) am {$date}."
+
+msgid "plugins.generic.webhook.status.zsId"
+msgstr "Zeitschriftenserver-ID: {$id}"
+
+msgid "plugins.generic.webhook.status.warnings"
+msgstr "Warnungen: {$warnings}"
+
+msgid "plugins.generic.webhook.status.error"
+msgstr "Fehler: {$error}"

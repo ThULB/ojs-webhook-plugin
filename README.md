@@ -71,6 +71,16 @@ time.
 5. `SendWebhookJob` retries up to 5 times (30s / 2min / 10min / 30min
    backoff) on failure, since the Zeitschriftenserver endpoint is idempotent
    per `submissionId`/`publicationId` and tolerates repeated requests.
+6. Every attempt's outcome is recorded in a dedicated `webhook_publication_status`
+   table, one row per publication (`WebhookStatus`): the event, whether it
+   succeeded, the Zeitschriftenserver's own `id`/`url` and any `warnings` from
+   a successful response, or the error message once `$tries` is exhausted
+   (`SendWebhookJob::failed()`). A failure leaves the last successful
+   response's `id`/`url`/`warnings` in place rather than clearing them.
+7. This status is shown read-only on the Publication tab's "Identifiers"
+   section (`Form::config::before` on the `publicationIdentifiers` form,
+   the same extension point the DOI/URN plugins use) and can be resent from
+   the plugin grid (see "Resending a webhook" below).
 
 ## Settings
 
@@ -112,12 +122,26 @@ updated configuration (see below).
   plugin, but the "Enable" toggle becomes unavailable again until a valid
   URL is configured.
 
+## Resending a webhook
+
+The gear-icon area in the plugin grid also has a "Resend webhook" action.
+Enter a submission ID (as shown in its URL) to re-dispatch the webhook for
+that submission's current publication, using whatever `event` was last sent
+for it (or `"updated"` if it was never sent before). Useful after a
+permanently failed delivery, or after fixing the configured webhook URL.
+
 ## Requirements
 
 - OJS 3.5.
 - A running job queue worker (e.g. `php tools/jobs.php process` or the
   scheduler set up in OJS 3.5), since the webhook is sent asynchronously via
   the queue. Without a running worker, jobs stay queued and are never sent.
+- `WebhookPlugin::getInstallMigration()` creates the `webhook_publication_status`
+  table, but that only runs automatically on a brand-new OJS installation.
+  On an *existing* installation, re-run
+  `php tools/installPluginVersion.php plugins/generic/webhook/version.xml`
+  after updating the plugin's files to create/update it (idempotent - safe
+  to run again on a later update that doesn't change the schema).
 
 ## Known limitations / open items
 
@@ -126,10 +150,6 @@ updated configuration (see below).
   (`localhost`, `127.0.0.1` are accepted on purpose), but it widens the
   attack surface in production if a journal manager can enter arbitrary
   URLs.
-- **No visible status/warnings:** a failed or permanently unreachable
-  endpoint only shows up in the job/failure logs; there is no indication on
-  the submission itself (sent/DOI/warnings/errors) or a "resend" action in
-  the backend.
 - **No GND field for authors:** OJS has no built-in GND identifier field, so
   it cannot be included in the `authors` payload.
 
@@ -153,13 +173,17 @@ and is not covered by this suite.
 
 ```
 webhook/
-├── WebhookPlugin.php          Plugin class, event listener, enable gate
-├── WebhookSettingsForm.php    Settings form (webhook URL/secret, DOI publish gate)
-├── WebhookUrlValidator.php    Shared http(s) URL validation
-├── SendWebhookJob.php         Async queue job for the HTTP POST
-├── settings.xml               Install defaults (enabled = false)
-├── version.xml                Plugin version information
-├── templates/settings.tpl     Smarty template for the settings form
-├── locale/{de,en}/locale.po   Translations
-└── tests/                     PHPUnit tests (WebhookUrlValidator only, see Development)
+├── WebhookPlugin.php           Plugin class, event listeners, enable gate, status display
+├── WebhookSettingsForm.php     Settings form (webhook URL/secret, DOI publish gate)
+├── WebhookResendForm.php       Manual "resend webhook for submission ID" form
+├── WebhookStatus.php           Reads/writes the per-publication status row
+├── WebhookStatusMigration.php  Creates the webhook_publication_status table
+├── WebhookUrlValidator.php     Shared http(s) URL validation
+├── SendWebhookJob.php          Async queue job for the HTTP POST
+├── settings.xml                Install defaults (enabled = false)
+├── version.xml                 Plugin version information
+├── templates/settings.tpl      Smarty template for the settings form
+├── templates/resend.tpl        Smarty template for the resend form
+├── locale/{de,en}/locale.po    Translations
+└── tests/                      PHPUnit tests (WebhookUrlValidator only, see Development)
 ```
