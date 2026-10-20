@@ -123,11 +123,11 @@ class SendWebhookJob extends BaseJob
         $body = json_encode($payload);
 
         $headers = ['Content-Type: application/json'];
-        if ($this->webhookSecret) {
-            // Sign the body instead of sending the secret itself, so it never
-            // crosses the wire and a captured request can't be replayed with a
-            // tampered payload.
-            $headers[] = 'X-Webhook-Signature: sha256=' . hash_hmac('sha256', $body, $this->webhookSecret);
+        // Sign the body instead of sending the secret itself, so it never
+        // crosses the wire and a captured request can't be replayed with a
+        // tampered payload.
+        if ($signature = WebhookPayload::signatureValue($body, $this->webhookSecret)) {
+            $headers[] = 'X-Webhook-Signature: sha256=' . $signature;
         }
 
         $ch = curl_init();
@@ -223,12 +223,7 @@ class SendWebhookJob extends BaseJob
      */
     protected function getKeywordsPayload(Publication $publication, string $locale): array
     {
-        $keywords = $publication->getData('keywords', $locale) ?? [];
-
-        return array_values(array_filter(array_map(
-            fn ($keyword) => $keyword['name'] ?? null,
-            $keywords
-        )));
+        return WebhookPayload::reduceKeywords($publication->getData('keywords', $locale) ?? []);
     }
 
     /**
@@ -247,7 +242,7 @@ class SendWebhookJob extends BaseJob
 
     protected function formatDate(?string $date): ?string
     {
-        return $date ? date('Y-m-d', strtotime($date)) : null;
+        return WebhookPayload::formatDate($date);
     }
 
     /**

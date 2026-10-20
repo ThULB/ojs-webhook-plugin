@@ -156,9 +156,10 @@ permanently failed delivery, or after fixing the configured webhook URL.
 ## Development
 
 `WebhookUrlValidator` (the http(s)-only URL check shared by `WebhookPlugin`'s
-enable-gate and `WebhookSettingsForm`'s field validator) has no OJS/PKP
-dependency and is covered by a PHPUnit suite that runs standalone, without an
-OJS installation:
+enable-gate and `WebhookSettingsForm`'s field validator) and `WebhookPayload`
+(date formatting, keyword reduction and HMAC signature computation used by
+`SendWebhookJob`) have no OJS/PKP dependency and are covered by a PHPUnit
+suite that runs standalone, without an OJS installation:
 
 ```
 composer install
@@ -179,11 +180,12 @@ webhook/
 ├── WebhookStatus.php           Reads/writes the per-publication status row
 ├── WebhookStatusMigration.php  Creates the webhook_publication_status table
 ├── WebhookUrlValidator.php     Shared http(s) URL validation
+├── WebhookPayload.php          Pure payload helpers (date format, keywords, HMAC signature)
 ├── SendWebhookJob.php          Async queue job for the HTTP POST
 ├── settings.xml                Install defaults (enabled = false)
 ├── version.xml                 Plugin version information
 ├── templates/settings.tpl      Smarty template for the settings form
 ├── templates/resend.tpl        Smarty template for the resend form
 ├── locale/{de,en}/locale.po    Translations
-└── tests/                      PHPUnit tests (WebhookUrlValidator only, see Development)
+└── tests/                      PHPUnit tests (WebhookUrlValidator, WebhookPayload; see Development)
 ```
