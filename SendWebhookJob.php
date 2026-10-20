@@ -3,15 +3,18 @@
 /**
  * @file SendWebhookJob.php
  *
- * @brief Queue job that notifies an external webhook when a publication is published.
- * Runs asynchronously so the editor's "Publish" action never blocks on the
- * remote endpoint's availability or response time.
+ * @brief Queue job that notifies an external webhook when a submission is sent to
+ * production or a publication is published. Runs asynchronously so the triggering
+ * editorial action never blocks on the remote endpoint's availability or response time.
  */
 
 namespace APP\plugins\generic\webhook;
 
+use APP\core\Application;
 use APP\facades\Repo;
 use APP\oai\ojs\OAIDAO;
+use APP\publication\Publication;
+use PKP\core\PKPRequest;
 use PKP\db\DAORegistry;
 use PKP\job\exceptions\JobException;
 use PKP\jobs\BaseJob;
@@ -19,6 +22,7 @@ use PKP\jobs\BaseJob;
 class SendWebhookJob extends BaseJob
 {
     public function __construct(
+        protected string $event,
         protected int $submissionId,
         protected int $publicationId,
         protected string $webhookUrl,
@@ -36,6 +40,8 @@ class SendWebhookJob extends BaseJob
             throw new JobException(JobException::INVALID_PAYLOAD);
         }
 
+        $contextId = $submission->getData('contextId');
+
         $issue = null;
         if ($issueId = $publication->getData('issueId')) {
             $issue = Repo::issue()->get($issueId);
@@ -43,15 +49,28 @@ class SendWebhookJob extends BaseJob
 
         $section = null;
         if ($sectionId = $publication->getData('sectionId')) {
-            $section = Repo::section()->get($sectionId, $submission->getData('contextId'));
+            $section = Repo::section()->get($sectionId, $contextId);
         }
 
         /** @var OAIDAO $oaiDao */
         $oaiDao = DAORegistry::getDAO('OAIDAO');
-        $journal = $oaiDao->getJournal($submission->getData('contextId'));
+        $journal = $oaiDao->getJournal($contextId);
+        $journalPath = $journal?->getPath();
+
+        $request = Application::get()->getRequest();
 
         $payload = [
-            'author' => $publication->getShortAuthorString(),
+            'event' => $this->event,
+            'source' => [
+                'ojsBaseUrl' => $request->getBaseUrl(),
+                'journalPath' => $journalPath,
+                'contextId' => $contextId,
+            ],
+            'submissionId' => $this->submissionId,
+            'publicationId' => $this->publicationId,
+            'version' => $publication->getData('version'),
+            'url' => $journalPath ? $request->getDispatcher()->url($request, Application::ROUTE_PAGE, $journalPath, 'article', 'view', [$this->submissionId]) : null,
+            'authors' => $this->getAuthorsPayload($publication),
             'article_title' => $publication->getLocalizedTitle(),
             'published_date' => $issue?->getDatePublished() ? date('Y-m-d', strtotime($issue->getDatePublished())) : null,
             'issue_title' => $issue?->getLocalizedTitle(),
@@ -63,6 +82,8 @@ class SendWebhookJob extends BaseJob
             'issue_volume' => $issue?->getVolume(),
             'issue_number' => $issue?->getNumber(),
             'issue_year' => $issue?->getYear(),
+            // No PDF with a DOI exists yet when a submission is only sent to production.
+            'galleys' => $this->event === 'production' ? null : $this->getGalleysPayload($publication, $request, $journalPath),
         ];
 
         $headers = ['Content-Type: application/json'];
@@ -77,6 +98,7 @@ class SendWebhookJob extends BaseJob
             CURLOPT_POST => true,
             CURLOPT_POSTFIELDS => json_encode($payload),
             CURLOPT_HTTPHEADER => $headers,
+            CURLOPT_USERAGENT => 'OJS-Webhook-Plugin/0.1 (+https://github.com/ThULB/ojs-webhook-plugin)',
             CURLOPT_CONNECTTIMEOUT => 5,
             CURLOPT_TIMEOUT => 15,
             // Defense in depth: WebhookPlugin/WebhookSettingsForm already restrict
@@ -98,5 +120,107 @@ class SendWebhookJob extends BaseJob
         if ($statusCode < 200 || $statusCode >= 300) {
             throw new \Exception("Webhook returned HTTP {$statusCode} for submission {$this->submissionId}: {$result}");
         }
+
+        $this->recordDoiFromResponse($publication, $contextId, json_decode((string) $result, true));
+    }
+
+    /**
+     * Build the per-author payload (name, role, ORCID, affiliations) instead of the
+     * collapsed "Lastname et al." author string, so the receiving end can link
+     * individual persons (e.g. via ORCID/GND) and DataCite's mandatory "creators"
+     * requirement can be satisfied.
+     */
+    protected function getAuthorsPayload(Publication $publication): array
+    {
+        $authors = [];
+
+        foreach ($publication->getData('authors') ?? [] as $author) {
+            $authors[] = [
+                'seq' => $author->getSequence(),
+                // OJS has no dedicated author/translator distinction (see README); the
+                // localized user group name is the closest honest equivalent available.
+                'role' => $author->getLocalizedUserGroupName(),
+                'givenName' => $author->getLocalizedGivenName(),
+                'familyName' => $author->getLocalizedFamilyName(),
+                'orcid' => $author->getData('orcid'),
+                'orcidVerified' => (bool) $author->getData('orcidIsVerified'),
+                'affiliations' => array_map(
+                    fn ($affiliation) => [
+                        'name' => $affiliation->getLocalizedName(),
+                        'ror' => $affiliation->getRor(),
+                    ],
+                    $author->getAffiliations()
+                ),
+            ];
+        }
+
+        return $authors;
+    }
+
+    /**
+     * Build the galley payload. Only relevant once a publication has actually been
+     * published: before that, no PDF with the registered DOI exists yet, and the
+     * download URL would not be publicly reachable (see README).
+     */
+    protected function getGalleysPayload(Publication $publication, PKPRequest $request, ?string $journalPath): array
+    {
+        if (!$journalPath) {
+            return [];
+        }
+
+        $galleys = Repo::galley()->getCollector()->filterByPublicationIds([$publication->getId()])->getMany();
+
+        $result = [];
+        foreach ($galleys as $galley) {
+            $submissionFileId = $galley->getData('submissionFileId');
+            $submissionFile = $submissionFileId ? Repo::submissionFile()->get($submissionFileId) : null;
+
+            $result[] = [
+                'id' => $galley->getId(),
+                'label' => $galley->getLabel(),
+                'mimeType' => $submissionFile?->getData('mimetype'),
+                'fileId' => $submissionFileId,
+                'url' => $request->getDispatcher()->url($request, Application::ROUTE_PAGE, $journalPath, 'article', 'download', [$this->submissionId, $galley->getId()]),
+            ];
+        }
+
+        return $result;
+    }
+
+    /**
+     * Record the DOI the receiving end minted, if any, so it is in place in OJS
+     * before the article is published. Never overwrites a DOI that already differs
+     * from the one reported back, since that would silently discard an existing
+     * registration; such a mismatch is logged for manual follow-up instead.
+     */
+    protected function recordDoiFromResponse(Publication $publication, int $contextId, ?array $response): void
+    {
+        $doi = $response['doi'] ?? null;
+        if (!$doi) {
+            return;
+        }
+
+        $existingDoiId = $publication->getData('doiId');
+        if ($existingDoiId) {
+            $existingDoi = Repo::doi()->get($existingDoiId);
+            if ($existingDoi && $existingDoi->getData('doi') === $doi) {
+                return;
+            }
+
+            error_log(sprintf(
+                'SendWebhookJob: Zeitschriftenserver returned DOI "%s" for publication %d, but DOI "%s" is already set. Not overwriting.',
+                $doi,
+                $publication->getId(),
+                $existingDoi?->getData('doi') ?? '(unknown)'
+            ));
+            return;
+        }
+
+        $doiId = Repo::doi()->add(Repo::doi()->newDataObject([
+            'doi' => $doi,
+            'contextId' => $contextId,
+        ]));
+
+        Repo::publication()->edit($publication, ['doiId' => $doiId]);
     }
 }

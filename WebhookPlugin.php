@@ -2,10 +2,12 @@
 
 namespace APP\plugins\generic\webhook;
 
+use APP\decision\Decision;
 use Illuminate\Support\Facades\Event;
 use PKP\core\JSONMessage;
 use PKP\linkAction\LinkAction;
 use PKP\linkAction\request\AjaxModal;
+use PKP\observers\events\DecisionAdded;
 use PKP\observers\events\PublicationPublished;
 use PKP\plugins\GenericPlugin;
 use PKP\submission\PKPSubmission;
@@ -39,6 +41,16 @@ class WebhookPlugin extends GenericPlugin
 
         if ($this->getEnabled($mainContextId)) {
             Event::listen(
+                DecisionAdded::class,
+                function (DecisionAdded $event) {
+                    if ($event->decisionType->getDecision() === Decision::SEND_TO_PRODUCTION) {
+                        $publication = $event->submission->getCurrentPublication();
+                        $this->dispatchWebhook('production', $event->context->getId(), $event->submission->getId(), $publication->getId());
+                    }
+                }
+            );
+
+            Event::listen(
                 PublicationPublished::class,
                 function (PublicationPublished $event) {
                     $publication = $event->publication;
@@ -49,7 +61,7 @@ class WebhookPlugin extends GenericPlugin
                     $isPublished = $publication->getData('status') === PKPSubmission::STATUS_PUBLISHED;
 
                     if (!$wasPublished && $isPublished) {
-                        $this->dispatchWebhook($submission->getData('contextId'), $submission->getId(), $publication->getId());
+                        $this->dispatchWebhook('published', $submission->getData('contextId'), $submission->getId(), $publication->getId());
                     }
                 }
             );
@@ -61,7 +73,7 @@ class WebhookPlugin extends GenericPlugin
     /**
      * Queue a webhook notification for an asynchronous send, if a webhook URL is configured.
      */
-    protected function dispatchWebhook(int $contextId, int $submissionId, int $publicationId): void
+    protected function dispatchWebhook(string $event, int $contextId, int $submissionId, int $publicationId): void
     {
         if (!$this->hasValidWebhookConfig($contextId)) {
             return;
@@ -70,7 +82,7 @@ class WebhookPlugin extends GenericPlugin
         $webhookUrl = $this->getSetting($contextId, 'webhookUrl');
         $webhookSecret = $this->getSetting($contextId, 'webhookSecret');
 
-        SendWebhookJob::dispatch($submissionId, $publicationId, $webhookUrl, $webhookSecret ?: null);
+        SendWebhookJob::dispatch($event, $submissionId, $publicationId, $webhookUrl, $webhookSecret ?: null);
     }
 
     /**

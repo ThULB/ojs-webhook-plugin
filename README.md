@@ -1,41 +1,67 @@
 # ojs-webhook-plugin
 
 Generic plugin for OJS 3.5 (plugin folder: `webhook`) that sends an HTTP
-webhook with the article's metadata to a configurable URL whenever an
-article is published for the first time.
+webhook with the article's metadata to a configurable URL whenever a
+submission is sent to production or an article is published for the first
+time.
 
 ## How it works
 
-1. The plugin registers a listener on the core `PublicationPublished` event.
-2. Whenever a publication is saved, it checks whether this is the transition
-   from *not published* to *published*
-   (`oldPublication.status !== PUBLISHED && publication.status === PUBLISHED`).
-   Re-saving an already-published article does **not** trigger another
-   webhook.
-3. If a valid `webhookUrl` is configured, a `SendWebhookJob` is queued on the
-   OJS job queue. The actual HTTP request therefore runs asynchronously and
-   does not block the "Publish" action in the backend.
-4. The job loads the submission, publication, issue, section and journal and
-   sends the following JSON payload via `POST`:
+1. The plugin registers two listeners:
+   - `DecisionAdded`, fired when a submission receives the editorial decision
+     `Decision::SEND_TO_PRODUCTION` ("Send to Production"). Sends `event:
+     "production"`.
+   - `PublicationPublished`, fired when a publication transitions from *not
+     published* to *published*
+     (`oldPublication.status !== PUBLISHED && publication.status ===
+     PUBLISHED`). Re-saving an already-published article does **not**
+     trigger another webhook. Sends `event: "published"`.
+2. If a valid `webhookUrl` is configured, a `SendWebhookJob` is queued on the
+   OJS job queue for the matching event. The actual HTTP request therefore
+   runs asynchronously and does not block the editorial action in the
+   backend.
+3. The job loads the submission, publication, issue, section and journal and
+   sends the following JSON payload via `POST`, with a `User-Agent` header
+   (required - MyCoRe-based endpoints reject requests without one) and,
+   if configured, an `X-Webhook-Secret` header carrying the `webhookSecret`
+   unchanged:
 
-   | Field                  | Source                                      |
-   |------------------------|----------------------------------------------|
-   | `author`               | `Publication::getShortAuthorString()`       |
-   | `article_title`        | `Publication::getLocalizedTitle()`          |
-   | `published_date`       | `Issue::getDatePublished()` (`Y-m-d`)       |
-   | `issue_title`          | `Issue::getLocalizedTitle()`                |
-   | `abstract`             | `Publication::getLocalizedData('abstract')` |
-   | `rich_pages`           | `Section::getLocalizedTitle()`              |
-   | `keywords`             | `Publication::getLocalizedData('keywords')` |
-   | `legal`                | `Publication::getData('rights')`            |
-   | `published_institute`  | `Journal::getData('publisherInstitution')`  |
-   | `issue_volume`         | `Issue::getVolume()`                        |
-   | `issue_number`         | `Issue::getNumber()`                        |
-   | `issue_year`           | `Issue::getYear()`                          |
+   | Field                  | Source                                              |
+   |------------------------|------------------------------------------------------|
+   | `event`                | `"production"` or `"published"`                      |
+   | `source.ojsBaseUrl`    | `Request::getBaseUrl()`                              |
+   | `source.journalPath`   | `Context::getPath()`                                 |
+   | `source.contextId`     | `Submission::getData('contextId')`                   |
+   | `submissionId`         | -                                                     |
+   | `publicationId`        | -                                                     |
+   | `version`              | `Publication::getData('version')`                    |
+   | `url`                  | Article view URL                                      |
+   | `authors`              | One entry per contributor (see below)                 |
+   | `article_title`        | `Publication::getLocalizedTitle()`                   |
+   | `published_date`       | `Issue::getDatePublished()` (`Y-m-d`)                |
+   | `issue_title`          | `Issue::getLocalizedTitle()`                         |
+   | `abstract`             | `Publication::getLocalizedData('abstract')`          |
+   | `rich_pages`           | `Section::getLocalizedTitle()`                       |
+   | `keywords`             | `Publication::getLocalizedData('keywords')`          |
+   | `legal`                | `Publication::getData('rights')`                     |
+   | `published_institute`  | `Journal::getData('publisherInstitution')`           |
+   | `issue_volume`         | `Issue::getVolume()`                                 |
+   | `issue_number`         | `Issue::getNumber()`                                 |
+   | `issue_year`           | `Issue::getYear()`                                   |
+   | `galleys`              | `null` for `production` (no PDF with a DOI exists yet); one entry per galley for `published` |
 
-   If a `webhookSecret` is configured, it is sent unchanged in the
-   `X-Webhook-Secret` header so the receiving endpoint can attribute the
-   request to this journal.
+   Each entry in `authors` carries `seq`, `role` (the author's localized user
+   group name - OJS has no dedicated author/translator field), `givenName`,
+   `familyName`, `orcid`, `orcidVerified` (`Author::getData('orcidIsVerified')`),
+   and `affiliations` (`name` + `ror`, from OJS 3.5's structured
+   affiliation/ROR model).
+
+   Each entry in `galleys` carries `id`, `label`, `mimeType`, `fileId` and
+   `url` (the article download URL).
+4. If the response body contains a `doi` field, the job records it on the
+   publication (`Repo::doi()->add()` + `doiId`) unless a *different* DOI is
+   already set there, in which case the mismatch is logged instead of
+   silently overwritten.
 
 ## Settings
 
