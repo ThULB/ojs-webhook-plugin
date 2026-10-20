@@ -7,15 +7,19 @@ time.
 
 ## How it works
 
-1. The plugin registers two listeners:
-   - `DecisionAdded`, fired when a submission receives the editorial decision
-     `Decision::SEND_TO_PRODUCTION` ("Send to Production"). Sends `event:
-     "production"`.
-   - `PublicationPublished`, fired when a publication transitions from *not
-     published* to *published*
-     (`oldPublication.status !== PUBLISHED && publication.status ===
-     PUBLISHED`). Re-saving an already-published article does **not**
-     trigger another webhook. Sends `event: "published"`.
+1. The plugin registers four listeners, each sending a different `event`:
+
+   | Listener                | Fires when                                                        | `event`        |
+   |-------------------------|---------------------------------------------------------------------|----------------|
+   | `DecisionAdded`         | A submission receives the editorial decision `Decision::SEND_TO_PRODUCTION` ("Send to Production") | `"production"` |
+   | `PublicationPublished`  | A publication transitions from *not published* to *published* (`oldPublication.status !== PUBLISHED && publication.status === PUBLISHED`). Re-saving an already-published article does **not** trigger another webhook. | `"published"`  |
+   | `MetadataChanged`       | A submission's metadata is saved, **and** its current publication already has a `doiId` (i.e. it was sent at least once before) | `"updated"`    |
+   | `PublicationUnpublished`| A publication is unpublished                                        | `"unpublished"`|
+
+   A newly published version of an already-published submission does not
+   need a dedicated trigger: it fires the existing `PublicationPublished`
+   listener again, and the payload's `version` field tells the receiving end
+   it supersedes the previous one.
 2. If a valid `webhookUrl` is configured, a `SendWebhookJob` is queued on the
    OJS job queue for the matching event. The actual HTTP request therefore
    runs asynchronously and does not block the editorial action in the
@@ -24,11 +28,13 @@ time.
    sends the following JSON payload via `POST`, with a `User-Agent` header
    (required - MyCoRe-based endpoints reject requests without one) and,
    if configured, an `X-Webhook-Secret` header carrying the `webhookSecret`
-   unchanged:
+   unchanged. Every localized field is resolved against `submission.locale`
+   (the submission's own primary language), never the interface language of
+   whoever triggered the webhook:
 
    | Field                  | Source                                              |
    |------------------------|------------------------------------------------------|
-   | `event`                | `"production"` or `"published"`                      |
+   | `event`                | `"production"`, `"published"`, `"updated"` or `"unpublished"` |
    | `source.ojsBaseUrl`    | `Request::getBaseUrl()`                              |
    | `source.journalPath`   | `Context::getPath()`                                 |
    | `source.contextId`     | `Submission::getData('contextId')`                   |
@@ -36,25 +42,24 @@ time.
    | `publicationId`        | -                                                     |
    | `version`              | `Publication::getData('version')`                    |
    | `url`                  | Article view URL                                      |
+   | `locale`               | `Submission::getData('locale')`                      |
+   | `title` / `prefix` / `subtitle` | `Publication::getData(…, $locale)`, read separately (unlike `getLocalizedTitle()`, `title` never has the prefix merged in) |
+   | `abstract`             | `Publication::getData('abstract', $locale)`          |
+   | `keywords`             | `Publication::getData('keywords', $locale)`, reduced from `[{"name": ...}]` to a plain list of strings |
+   | `pages`                | `Publication::getData('pages')`                      |
+   | `datePublished`        | `Publication::getData('datePublished')` (`Y-m-d`)    |
+   | `license.url` / `.copyrightHolder` / `.copyrightYear` | `Publication::getData('licenseUrl'\|'copyrightHolder'\|'copyrightYear')` |
+   | `section.id` / `.title`| `Section::getId()` / `getTitle($locale)`             |
+   | `issue.id` / `.volume` / `.number` / `.year` / `.title` / `.datePublished` | `Issue` accessors                |
+   | `doi`                  | The DOI already on file in OJS for this publication (`Publication::getData('doiId')` → `Doi::getDoi()`), if any |
    | `authors`              | One entry per contributor (see below)                 |
-   | `article_title`        | `Publication::getLocalizedTitle()`                   |
-   | `published_date`       | `Issue::getDatePublished()` (`Y-m-d`)                |
-   | `issue_title`          | `Issue::getLocalizedTitle()`                         |
-   | `abstract`             | `Publication::getLocalizedData('abstract')`          |
-   | `rich_pages`           | `Section::getLocalizedTitle()`                       |
-   | `keywords`             | `Publication::getLocalizedData('keywords')`          |
-   | `legal`                | `Publication::getData('rights')`                     |
-   | `published_institute`  | `Journal::getData('publisherInstitution')`           |
-   | `issue_volume`         | `Issue::getVolume()`                                 |
-   | `issue_number`         | `Issue::getNumber()`                                 |
-   | `issue_year`           | `Issue::getYear()`                                   |
-   | `galleys`              | `null` for `production` (no PDF with a DOI exists yet); one entry per galley for `published` |
+   | `galleys`              | `null` for `production` and `unpublished`; one entry per galley for `published`/`updated` |
 
-   Each entry in `authors` carries `seq`, `role` (the author's localized user
-   group name - OJS has no dedicated author/translator field), `givenName`,
-   `familyName`, `orcid`, `orcidVerified` (`Author::getData('orcidIsVerified')`),
-   and `affiliations` (`name` + `ror`, from OJS 3.5's structured
-   affiliation/ROR model).
+   Each entry in `authors` carries `seq`, `role` (the author's user group
+   name, in `locale` - OJS has no dedicated author/translator field),
+   `givenName`, `familyName`, `orcid`, `orcidVerified`
+   (`Author::getData('orcidIsVerified')`), and `affiliations` (`name` + `ror`,
+   from OJS 3.5's structured affiliation/ROR model).
 
    Each entry in `galleys` carries `id`, `label`, `mimeType`, `fileId` and
    `url` (the article download URL).

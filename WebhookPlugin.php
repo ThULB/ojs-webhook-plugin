@@ -8,7 +8,9 @@ use PKP\core\JSONMessage;
 use PKP\linkAction\LinkAction;
 use PKP\linkAction\request\AjaxModal;
 use PKP\observers\events\DecisionAdded;
+use PKP\observers\events\MetadataChanged;
 use PKP\observers\events\PublicationPublished;
+use PKP\observers\events\PublicationUnpublished;
 use PKP\plugins\GenericPlugin;
 use PKP\submission\PKPSubmission;
 
@@ -63,6 +65,28 @@ class WebhookPlugin extends GenericPlugin
                     if (!$wasPublished && $isPublished) {
                         $this->dispatchWebhook('published', $submission->getData('contextId'), $submission->getId(), $publication->getId());
                     }
+                }
+            );
+
+            Event::listen(
+                MetadataChanged::class,
+                function (MetadataChanged $event) {
+                    $submission = $event->submission;
+                    $publication = $submission->getCurrentPublication();
+
+                    // Only resend if this publication was already sent at least once
+                    // (tracked via the DOI a prior production/published webhook got
+                    // back) - otherwise the receiving end has nothing to update yet.
+                    if ($publication->getData('doiId')) {
+                        $this->dispatchWebhook('updated', $submission->getData('contextId'), $submission->getId(), $publication->getId());
+                    }
+                }
+            );
+
+            Event::listen(
+                PublicationUnpublished::class,
+                function (PublicationUnpublished $event) {
+                    $this->dispatchWebhook('unpublished', $event->context->getId(), $event->submission->getId(), $event->publication->getId());
                 }
             );
         }

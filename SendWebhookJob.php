@@ -59,6 +59,11 @@ class SendWebhookJob extends BaseJob
 
         $request = Application::get()->getRequest();
 
+        // The surface language of whoever triggers the webhook (e.g. the editor
+        // clicking "Publish") must not affect the payload - always resolve every
+        // localized field against the submission's own primary language instead.
+        $locale = $submission->getData('locale');
+
         $payload = [
             'event' => $this->event,
             'source' => [
@@ -70,20 +75,37 @@ class SendWebhookJob extends BaseJob
             'publicationId' => $this->publicationId,
             'version' => $publication->getData('version'),
             'url' => $journalPath ? $request->getDispatcher()->url($request, Application::ROUTE_PAGE, $journalPath, 'article', 'view', [$this->submissionId]) : null,
-            'authors' => $this->getAuthorsPayload($publication),
-            'article_title' => $publication->getLocalizedTitle(),
-            'published_date' => $issue?->getDatePublished() ? date('Y-m-d', strtotime($issue->getDatePublished())) : null,
-            'issue_title' => $issue?->getLocalizedTitle(),
-            'abstract' => $publication->getLocalizedData('abstract'),
-            'rich_pages' => $section?->getLocalizedTitle(),
-            'keywords' => $publication->getLocalizedData('keywords'),
-            'legal' => $publication->getData('rights'),
-            'published_institute' => $journal?->getData('publisherInstitution'),
-            'issue_volume' => $issue?->getVolume(),
-            'issue_number' => $issue?->getNumber(),
-            'issue_year' => $issue?->getYear(),
+            'locale' => $locale,
+            'title' => $publication->getData('title', $locale),
+            'prefix' => $publication->getData('prefix', $locale),
+            'subtitle' => $publication->getData('subtitle', $locale),
+            'abstract' => $publication->getData('abstract', $locale),
+            'keywords' => $this->getKeywordsPayload($publication, $locale),
+            'pages' => $publication->getData('pages'),
+            'datePublished' => $this->formatDate($publication->getData('datePublished')),
+            'license' => [
+                'url' => $publication->getData('licenseUrl'),
+                'copyrightHolder' => $publication->getData('copyrightHolder', $locale),
+                'copyrightYear' => $publication->getData('copyrightYear'),
+            ],
+            'section' => $section ? [
+                'id' => $section->getId(),
+                'title' => $section->getTitle($locale),
+            ] : null,
+            'issue' => $issue ? [
+                'id' => $issue->getId(),
+                'volume' => $issue->getVolume(),
+                'number' => $issue->getNumber(),
+                'year' => $issue->getYear(),
+                'title' => $issue->getTitle($locale),
+                'datePublished' => $this->formatDate($issue->getDatePublished()),
+            ] : null,
+            'doi' => $this->getCurrentDoi($publication),
+            'authors' => $this->getAuthorsPayload($publication, $locale),
             // No PDF with a DOI exists yet when a submission is only sent to production.
-            'galleys' => $this->event === 'production' ? null : $this->getGalleysPayload($publication, $request, $journalPath),
+            'galleys' => in_array($this->event, ['published', 'updated'], true)
+                ? $this->getGalleysPayload($publication, $request, $journalPath)
+                : null,
         ];
 
         $headers = ['Content-Type: application/json'];
@@ -130,7 +152,7 @@ class SendWebhookJob extends BaseJob
      * individual persons (e.g. via ORCID/GND) and DataCite's mandatory "creators"
      * requirement can be satisfied.
      */
-    protected function getAuthorsPayload(Publication $publication): array
+    protected function getAuthorsPayload(Publication $publication, string $locale): array
     {
         $authors = [];
 
@@ -138,15 +160,16 @@ class SendWebhookJob extends BaseJob
             $authors[] = [
                 'seq' => $author->getSequence(),
                 // OJS has no dedicated author/translator distinction (see README); the
-                // localized user group name is the closest honest equivalent available.
-                'role' => $author->getLocalizedUserGroupName(),
-                'givenName' => $author->getLocalizedGivenName(),
-                'familyName' => $author->getLocalizedFamilyName(),
+                // user group name in the submission's language is the closest honest
+                // equivalent available.
+                'role' => $author->getUserGroup()?->getLocalizedData('name', $locale),
+                'givenName' => $author->getGivenName($locale),
+                'familyName' => $author->getFamilyName($locale),
                 'orcid' => $author->getData('orcid'),
                 'orcidVerified' => (bool) $author->getData('orcidIsVerified'),
                 'affiliations' => array_map(
                     fn ($affiliation) => [
-                        'name' => $affiliation->getLocalizedName(),
+                        'name' => $affiliation->getLocalizedName($locale),
                         'ror' => $affiliation->getRor(),
                     ],
                     $author->getAffiliations()
@@ -155,6 +178,40 @@ class SendWebhookJob extends BaseJob
         }
 
         return $authors;
+    }
+
+    /**
+     * Reduce the controlled-vocabulary keyword entries (`[{"name": ..., "source": ...,
+     * "identifier": ...}]`) to a plain list of strings, as agreed with the
+     * Zeitschriftenserver side.
+     */
+    protected function getKeywordsPayload(Publication $publication, string $locale): array
+    {
+        $keywords = $publication->getData('keywords', $locale) ?? [];
+
+        return array_values(array_filter(array_map(
+            fn ($keyword) => $keyword['name'] ?? null,
+            $keywords
+        )));
+    }
+
+    /**
+     * The DOI OJS already has on file for this publication, if any, so the receiving
+     * end can compare it against the one it manages itself.
+     */
+    protected function getCurrentDoi(Publication $publication): ?string
+    {
+        $doiId = $publication->getData('doiId');
+        if (!$doiId) {
+            return null;
+        }
+
+        return Repo::doi()->get($doiId)?->getDoi();
+    }
+
+    protected function formatDate(?string $date): ?string
+    {
+        return $date ? date('Y-m-d', strtotime($date)) : null;
     }
 
     /**
