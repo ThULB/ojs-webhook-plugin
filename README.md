@@ -154,7 +154,9 @@ rather than falsely reporting success.
   attack surface in production if a journal manager can enter arbitrary
   URLs.
 - **No GND field for authors:** OJS has no built-in GND identifier field, so
-  it cannot be included in the `authors` payload.
+  it cannot be included in the `authors` payload. Decided not to add one -
+  the `orcid`/`orcidVerified` fields already on each author are considered
+  a sufficient identifier.
 
 ## Development
 
