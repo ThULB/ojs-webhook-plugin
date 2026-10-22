@@ -75,7 +75,55 @@ msgid "plugins.generic.webhook.status.zsId"
 msgstr "Zeitschriftenserver-ID: {$id}"
 
 msgid "plugins.generic.webhook.status.warnings"
-msgstr "Warnungen: {$warnings}"
+msgstr "Warnungen:"
+
+msgid "plugins.generic.webhook.status.warning"
+msgstr "- {$label}: {$detail}"
+
+msgid "plugins.generic.webhook.status.warning.noDetail"
+msgstr "- {$label}"
 
 msgid "plugins.generic.webhook.status.error"
 msgstr "Fehler: {$error}"
+
+msgid "plugins.generic.webhook.warning.noIssue"
+msgstr "Der Artikel ist noch keiner Ausgabe zugeordnet."
+
+msgid "plugins.generic.webhook.warning.ambiguousTitle"
+msgstr "Mehrere Artikel der Ausgabe tragen diesen Titel; der erste wurde aktualisiert."
+
+msgid "plugins.generic.webhook.warning.unknownRubric"
+msgstr "Für diese Sektion wurde im Zeitschriftenserver keine passende Rubrik gefunden."
+
+msgid "plugins.generic.webhook.warning.noPersons"
+msgstr "Dem Artikel ist noch keine Person zugeordnet; DataCite benötigt mindestens eine Autorin/einen Autor."
+
+msgid "plugins.generic.webhook.warning.unlinkedAuthors"
+msgstr "Autor/innen ohne verwendbare ORCID (fehlt, ungültig oder einer anderen Person gehörend) wurden nicht verknüpft."
+
+msgid "plugins.generic.webhook.warning.invalidOrcid"
+msgstr "Eine ORCID ist ungültig (falsches Format oder falsche Prüfziffer)."
+
+msgid "plugins.generic.webhook.warning.foreignOrcid"
+msgstr "Eine unbestätigte ORCID gehört einer Person mit anderem Namen; die Autorin/der Autor wurde nicht verknüpft."
+
+msgid "plugins.generic.webhook.warning.unverifiedOrcid"
+msgstr "Eine Autorin/ein Autor wurde über eine ORCID verknüpft, die über ORCID noch nicht bestätigt wurde."
+
+msgid "plugins.generic.webhook.warning.noPages"
+msgstr "Für diesen Artikel ist kein Seitenbereich angegeben."
+
+msgid "plugins.generic.webhook.warning.doiDisabled"
+msgstr "Für diese Zeitschrift ist im Zeitschriftenserver kein DOI-Dienst konfiguriert."
+
+msgid "plugins.generic.webhook.warning.doiFailed"
+msgstr "Der DOI-Dienst konnte keine DOI vergeben."
+
+msgid "plugins.generic.webhook.warning.doiMismatch"
+msgstr "OJS und der Zeitschriftenserver haben für diesen Artikel unterschiedliche DOIs hinterlegt."
+
+msgid "plugins.generic.webhook.warning.unknownSubmission"
+msgstr "Zu dieser Einreichung gibt es im Zeitschriftenserver keinen Artikel."
+
+msgid "plugins.generic.webhook.warning.unpublishedInOjs"
+msgstr "Diese Einreichung wurde in OJS zurückgezogen; der Artikel und seine DOI bleiben im Zeitschriftenserver bestehen."

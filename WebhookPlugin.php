@@ -186,10 +186,16 @@ class WebhookPlugin extends GenericPlugin
             $lines[] = __('plugins.generic.webhook.status.zsId', ['id' => $status['zsId']]);
         }
 
-        if (!empty($status['warnings'])) {
-            $codes = WebhookStatusFormatter::warningCodes($status['warnings']);
-            if ($codes) {
-                $lines[] = __('plugins.generic.webhook.status.warnings', ['warnings' => $codes]);
+        $warnings = WebhookStatusFormatter::normalizeWarnings($status['warnings'] ?? []);
+        if ($warnings) {
+            $lines[] = __('plugins.generic.webhook.status.warnings');
+            foreach ($warnings as $warning) {
+                $localeKey = WebhookStatusFormatter::localeKeyForCode($warning['code']);
+                $label = $localeKey ? __($localeKey) : $warning['code'];
+
+                $lines[] = $warning['detail']
+                    ? __('plugins.generic.webhook.status.warning', ['label' => $label, 'detail' => $warning['detail']])
+                    : __('plugins.generic.webhook.status.warning.noDetail', ['label' => $label]);
             }
         }
 

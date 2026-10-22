@@ -75,7 +75,55 @@ msgid "plugins.generic.webhook.status.zsId"
 msgstr "Zeitschriftenserver ID: {$id}"
 
 msgid "plugins.generic.webhook.status.warnings"
-msgstr "Warnings: {$warnings}"
+msgstr "Warnings:"
+
+msgid "plugins.generic.webhook.status.warning"
+msgstr "- {$label}: {$detail}"
+
+msgid "plugins.generic.webhook.status.warning.noDetail"
+msgstr "- {$label}"
 
 msgid "plugins.generic.webhook.status.error"
 msgstr "Error: {$error}"
+
+msgid "plugins.generic.webhook.warning.noIssue"
+msgstr "The article is not yet assigned to an issue."
+
+msgid "plugins.generic.webhook.warning.ambiguousTitle"
+msgstr "Several articles in the issue share this title; the first one was updated."
+
+msgid "plugins.generic.webhook.warning.unknownRubric"
+msgstr "No matching rubric was found for this section in the Zeitschriftenserver."
+
+msgid "plugins.generic.webhook.warning.noPersons"
+msgstr "No person is linked to the article yet; DataCite requires at least one creator."
+
+msgid "plugins.generic.webhook.warning.unlinkedAuthors"
+msgstr "Authors without a usable ORCID iD (missing, invalid or belonging to someone else) were not linked."
+
+msgid "plugins.generic.webhook.warning.invalidOrcid"
+msgstr "An ORCID iD is malformed (wrong format or check digit)."
+
+msgid "plugins.generic.webhook.warning.foreignOrcid"
+msgstr "An unverified ORCID iD belongs to a person of another name; the author was not linked."
+
+msgid "plugins.generic.webhook.warning.unverifiedOrcid"
+msgstr "An author was linked by an ORCID iD they have not confirmed via ORCID."
+
+msgid "plugins.generic.webhook.warning.noPages"
+msgstr "No page range is set for this article."
+
+msgid "plugins.generic.webhook.warning.doiDisabled"
+msgstr "No DOI service is configured for this journal in the Zeitschriftenserver."
+
+msgid "plugins.generic.webhook.warning.doiFailed"
+msgstr "The DOI service was unable to mint a DOI."
+
+msgid "plugins.generic.webhook.warning.doiMismatch"
+msgstr "OJS and the Zeitschriftenserver have different DOIs on file for this article."
+
+msgid "plugins.generic.webhook.warning.unknownSubmission"
+msgstr "No article exists for this submission in the Zeitschriftenserver."
+
+msgid "plugins.generic.webhook.warning.unpublishedInOjs"
+msgstr "This submission was withdrawn in OJS; the article and its DOI remain in the Zeitschriftenserver."

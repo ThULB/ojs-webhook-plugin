@@ -89,7 +89,13 @@ time.
    a successful response, or the error message once `$tries` is exhausted
    (`SendWebhookJob::failed()`). A failure leaves the last successful
    response's `id`/`url`/`warnings` in place rather than clearing them.
-7. This status is shown read-only on the Publication tab's "Identifiers"
+7. Each warning's `code` (e.g. `UNLINKED_AUTHORS`, `DOI_MISMATCH`) is translated
+   to a locale string for display (`WebhookStatusFormatter::localeKeyForCode()`
+   plus the `plugins.generic.webhook.warning.*` keys), shown together with the
+   response's own `detail` text (English, from the Zeitschriftenserver - not
+   `message`). A code added by a newer Zeitschriftenserver than this plugin
+   knows about falls back to showing the raw code.
+8. This status is shown read-only on the Publication tab's "Identifiers"
    section (`Form::config::before` on the `publicationIdentifiers` form,
    the same extension point the DOI/URN plugins use) and can be resent from
    the plugin grid (see "Resending a webhook" below).
