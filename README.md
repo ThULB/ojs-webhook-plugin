@@ -64,10 +64,9 @@ time.
    | Field          | Source                                                        |
    |----------------|----------------------------------------------------------------|
    | `seq`          | `Author::getSequence()`                                        |
-   | `role`         | The author's user group name, in `locale` - display fallback only, **not** meant to be parsed/guessed by the receiving end (OJS has no dedicated author/translator field, and custom groups sharing the same `roleId` are indistinguishable by name alone in every language) |
+   | `role`         | The author's user group name, in `locale` - display fallback only, **not** meant to be parsed/guessed by the receiving end (OJS has no dedicated author/translator field) |
    | `userGroupId`  | `Author::getUserGroupId()` - stable, identifies the exact group  |
-   | `roleId`       | `UserGroup::roleId`, one of PKP's `Role::ROLE_ID_*` constants - **does not** distinguish between groups that share a role (e.g. a custom "Translator" group is still `ROLE_ID_AUTHOR`) |
-   | `roleName.en`  | `UserGroup::getLocalizedData('name', 'en_US', strict)` - `null` unless the journal has the `en_US` locale installed, since a custom group only has a translation for the locales an admin filled in (see "Known limitations") |
+   | `roleKey`      | `UserGroup::nameLocaleKey` - the locale-independent key behind a *default* user group's translated name (e.g. `default.groups.name.author`, `default.groups.name.translator`), stable across renames and across languages. `null` for a user group the editorial office created itself, which has no such key. `UserGroup::roleId` (one of PKP's `Role::ROLE_ID_*` constants) is deliberately not sent - it does not distinguish between groups that share a role (a custom "Translator" group is still `ROLE_ID_AUTHOR`, same as "Author"), so it carries no information `roleKey`/`userGroupId` doesn't already. |
    | `givenName` / `familyName` | `Author::getGivenName()` / `getFamilyName()`        |
    | `orcid` / `orcidVerified` | `Author::getData('orcid'\|'orcidIsVerified')`        |
    | `affiliations` | `name` + `ror`, from OJS 3.5's structured affiliation/ROR model |
@@ -215,13 +214,11 @@ rather than falsely reporting success.
   it cannot be included in the `authors` payload. Decided not to add one -
   the `orcid`/`orcidVerified` fields already on each author are considered
   a sufficient identifier.
-- **`roleName.en` depends on the journal's installed locales:** it is only
-  populated if `en_US` is one of the journal's enabled locales (Website
-  Settings > Languages), since a custom user group (e.g. "Translator") has no
-  translation beyond whatever locales an admin actually filled in for it -
-  there is no locale-independent fallback for those. The receiving end should
-  key off `userGroupId`/`roleId` rather than depend on this field being
-  present.
+- **`roleKey` is `null` for editorial-office-created user groups:** only
+  OJS's built-in default groups (Author, Reviewer, ...) carry a
+  `nameLocaleKey`. A custom group (e.g. a journal's own "Translator" group)
+  has none, so `roleKey` is `null` for its members - the receiving end falls
+  back to linking as an author with a warning in that case.
 
 ## Development
 

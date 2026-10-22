@@ -20,7 +20,6 @@ use PKP\db\DAORegistry;
 use PKP\job\exceptions\JobException;
 use PKP\jobs\BaseJob;
 use PKP\submission\PKPSubmission;
-use PKP\userGroup\UserGroup;
 
 class SendWebhookJob extends BaseJob
 {
@@ -228,18 +227,13 @@ class SendWebhookJob extends BaseJob
                 // this string.
                 'role' => $userGroup?->getLocalizedData('name', $locale),
                 'userGroupId' => $author->getUserGroupId(),
-                // The PKP role constant (e.g. 65536 for ROLE_ID_AUTHOR). Note this does NOT
-                // distinguish between user groups that share the same role - e.g. "Author" and a
-                // custom "Translator" group are both ROLE_ID_AUTHOR - so userGroupId remains the
-                // only value that identifies the group itself.
-                'roleId' => $userGroup?->roleId,
-                // Best-effort, locale-independent label: only non-null if the journal actually has
-                // the en_US locale installed (see README). getLocalizedData() falls back to the
-                // "best" available locale by default, which would defeat the point here, so the
-                // lookup is forced to an exact match instead.
-                'roleName' => [
-                    'en' => $userGroup?->getLocalizedData('name', 'en_US', UserGroup::LOCALE_MATCH_STRICT),
-                ],
+                // The locale-independent key behind a default user group's translated name (e.g.
+                // "default.groups.name.author", "default.groups.name.translator") - stable across
+                // renames and languages, unlike `role`. `roleId` (the PKP Role::ROLE_ID_* constant)
+                // doesn't help here: "Author" and a custom "Translator" group both carry
+                // ROLE_ID_AUTHOR. `null` for a user group the editorial office created itself,
+                // which has no such key.
+                'roleKey' => $userGroup?->nameLocaleKey,
                 'givenName' => $author->getGivenName($locale),
                 'familyName' => $author->getFamilyName($locale),
                 'orcid' => $author->getData('orcid'),
