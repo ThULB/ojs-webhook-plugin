@@ -14,7 +14,7 @@ time.
    | `DecisionAdded`         | A submission receives the editorial decision `Decision::SEND_TO_PRODUCTION` ("Send to Production") | `"production"` |
    | `PublicationPublished`  | A publication transitions from *not published* to *published* (`oldPublication.status !== PUBLISHED && publication.status === PUBLISHED`). Re-saving an already-published article does **not** trigger another webhook. | `"published"`  |
    | `MetadataChanged`       | A submission's metadata is saved, **and** the Zeitschriftenserver has accepted this publication at least once before (a `zsId` is on record for it - not `doiId`, since the Zeitschriftenserver may have accepted the submission without being able to mint a DOI yet). Skipped if a `"published"` webhook for the same publication was already dispatched earlier in the same request, since OJS fires `MetadataChanged` again right after publishing. | `"updated"`    |
-   | `Galley::add` / `Galley::edit` | A galley is added or edited directly on the galley ("Fahnen") form on an **already-published** publication with a `zsId` on record. Unlike the upload wizard's `saveMetadata()` action, editing a galley this way does not fire `MetadataChanged` on its own (see "Known limitations"), so a corrected galley/PDF would otherwise never reach the Zeitschriftenserver. | `"updated"`    |
+   | `Galley::add` / `Galley::edit` | A galley is added, or edited with an actual change to its `label`, `locale`, `submissionFileId` or `urlRemote` (not e.g. a drag-and-drop reorder, which only changes `seq`), on an **already-published** publication with a `zsId` on record. Unlike the upload wizard's `saveMetadata()` action, editing a galley this way does not fire `MetadataChanged` on its own (see "Known limitations"), so a corrected galley/PDF would otherwise never reach the Zeitschriftenserver. | `"updated"`    |
    | `PublicationUnpublished`| A publication is unpublished                                        | `"unpublished"`|
 
    A newly published version of an already-published submission does not
@@ -188,13 +188,16 @@ rather than falsely reporting success.
   (`localhost`, `127.0.0.1` are accepted on purpose), but it widens the
   attack surface in production if a journal manager can enter arbitrary
   URLs.
-- **A replaced file without a galley/metadata change is not caught:** OJS's
-  core `SubmissionFile` repository fires hooks for `add`/`delete` but not for
-  `edit` - there is no `SubmissionFile::edit` hook to listen on. Replacing a
-  galley's file through means that don't also go through `Galley::edit` (e.g.
-  a bare file swap wired up by a custom workflow) will not trigger an
-  `"updated"` webhook. Covered: edits made via the galley ("Fahnen") form,
-  which does call `Repo::galley()->edit()`.
+- **A galley file replacement is covered indirectly, not a bare metadata edit
+  on an existing file revision:** uploading a new revision of a galley's file
+  goes through `SubmissionFileRepository::add()`, which itself calls
+  `Repo::galley()->edit()` to point the galley at the new revision - so the
+  normal "replace this galley's PDF" action is caught by the `Galley::edit`
+  listener above. What is *not* caught: OJS's core `SubmissionFile`
+  repository fires hooks for `add`/`delete` but not for `edit` - there is no
+  `SubmissionFile::edit` hook to listen on - so a change to an *existing*
+  file revision's own metadata (not a new revision, and not through the
+  galley form) would not trigger an `"updated"` webhook.
 - **No GND field for authors:** OJS has no built-in GND identifier field, so
   it cannot be included in the `authors` payload. Decided not to add one -
   the `orcid`/`orcidVerified` fields already on each author are considered

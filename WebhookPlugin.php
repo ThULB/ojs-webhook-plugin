@@ -129,6 +129,16 @@ class WebhookPlugin extends GenericPlugin
             Hook::add('Galley::edit', function (string $hookName, array $args) {
                 /** @var Galley $newGalley */
                 $newGalley = $args[0];
+                /** @var Galley $oldGalley */
+                $oldGalley = $args[1];
+
+                // Skip edits that don't change anything the webhook payload (or a reader) cares
+                // about - a drag-and-drop reorder in the galley grid, for instance, only changes
+                // `seq` and would otherwise queue a pointless "updated" webhook on every reorder.
+                if (!$this->galleyContentChanged($oldGalley, $newGalley)) {
+                    return;
+                }
+
                 $this->handleGalleyChanged($newGalley->getData('publicationId'));
             });
 
@@ -232,6 +242,22 @@ class WebhookPlugin extends GenericPlugin
         $event = $status['event'] ?? 'updated';
 
         return $this->dispatchWebhook($event, $submission->getData('contextId'), $submissionId, $publication->getId());
+    }
+
+    /**
+     * Whether a galley edit touched a field the webhook payload (or a reader) actually cares
+     * about: its file, its label, its locale, or a remote URL it points to instead of a file.
+     * Deliberately excludes `seq` and other purely cosmetic/grid-internal fields.
+     */
+    protected function galleyContentChanged(Galley $old, Galley $new): bool
+    {
+        foreach (['label', 'locale', 'submissionFileId', 'urlRemote'] as $field) {
+            if ($old->getData($field) !== $new->getData($field)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
