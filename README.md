@@ -47,8 +47,8 @@ time.
    | `version`              | `Publication::getData('version')`                    |
    | `url`                  | Article view URL                                      |
    | `locale`               | `Submission::getData('locale')`                      |
-   | `title` / `prefix` / `subtitle` | `Publication::getData(…, $locale)`, read separately (unlike `getLocalizedTitle()`, `title` never has the prefix merged in) |
-   | `abstract`             | `Publication::getData('abstract', $locale)`          |
+   | `title` / `prefix` / `subtitle` | `Publication::getData(…, $locale)`, read separately (unlike `getLocalizedTitle()`, `title` never has the prefix merged in). `title` and `subtitle` may contain HTML, exactly as OJS stores them (see `abstract` below). |
+   | `abstract`             | `Publication::getData('abstract', $locale)` - HTML, exactly as entered in OJS's rich text editor (the receiving end is expected to convert it to plain text itself; this plugin does not strip or sanitize it) |
    | `keywords`             | `Publication::getData('keywords', $locale)`, reduced from `[{"name": ...}]` to a plain list of strings |
    | `pages`                | `Publication::getData('pages')`                      |
    | `datePublished`        | `Publication::getData('datePublished')` (`Y-m-d`)    |
@@ -127,6 +127,21 @@ assigned.
 
 Saving the form reloads the page so the plugin grid immediately reflects the
 updated configuration (see below).
+
+### Recommended: enable ORCID for the journal
+
+Independently of this plugin's own settings, the journal's ORCID integration
+(Website Settings > Distribution > ORCID, enabled per journal) should be
+turned on. This is journal configuration, not something this plugin checks
+or warns about. Without it, authors have no way to authenticate their ORCID
+iD, which has two effects on the Zeitschriftenserver side:
+
+- Every author shows up as `orcidVerified: false`, so the `UNVERIFIED_ORCID`
+  warning fires for authors who otherwise have a perfectly valid iD on file.
+- An unverified ORCID iD only links to an *existing* person in the
+  Zeitschriftenserver if the name matches - an author entering someone
+  else's iD by mistake, or a legitimate name change, can silently link the
+  wrong person (or fail to link at all) without that authentication step.
 
 ## Enabling the plugin
 
