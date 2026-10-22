@@ -41,7 +41,8 @@ class SendWebhookJob extends BaseJob
         protected int $submissionId,
         protected int $publicationId,
         protected string $webhookUrl,
-        protected ?string $webhookSecret
+        protected ?string $webhookSecret,
+        protected string $pluginVersion
     ) {
         parent::__construct();
     }
@@ -149,7 +150,7 @@ class SendWebhookJob extends BaseJob
             CURLOPT_POST => true,
             CURLOPT_POSTFIELDS => $body,
             CURLOPT_HTTPHEADER => $headers,
-            CURLOPT_USERAGENT => 'OJS-Webhook-Plugin/0.1 (+https://github.com/ThULB/ojs-webhook-plugin)',
+            CURLOPT_USERAGENT => "OJS-Webhook-Plugin/{$this->pluginVersion} (+https://github.com/ThULB/ojs-webhook-plugin)",
             CURLOPT_CONNECTTIMEOUT => 5,
             CURLOPT_TIMEOUT => 15,
             // Defense in depth: WebhookPlugin/WebhookSettingsForm already restrict

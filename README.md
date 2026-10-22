@@ -27,8 +27,10 @@ time.
    backend.
 3. The job loads the submission, publication, issue, section and journal and
    sends the following JSON payload via `POST`, with a `User-Agent` header
-   (required - MyCoRe-based endpoints reject requests without one) and,
-   if configured, an `X-Webhook-Signature` header carrying
+   (required - MyCoRe-based endpoints reject requests without one; carries
+   the plugin's actual installed version, read via `Plugin::getCurrentVersion()`
+   at dispatch time rather than a hardcoded string) and, if configured, an
+   `X-Webhook-Signature` header carrying
    `sha256=<hmac-sha256 of the request body, keyed with webhookSecret>` (the
    secret itself is never sent). Every localized field is resolved against
    `submission.locale` (the submission's own primary language), never the

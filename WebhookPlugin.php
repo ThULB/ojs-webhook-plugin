@@ -281,9 +281,21 @@ class WebhookPlugin extends GenericPlugin
         $webhookUrl = $this->getSetting($contextId, 'webhookUrl');
         $webhookSecret = $this->getSetting($contextId, 'webhookSecret');
 
-        SendWebhookJob::dispatch($event, $submissionId, $publicationId, $webhookUrl, $webhookSecret ?: null);
+        SendWebhookJob::dispatch($event, $submissionId, $publicationId, $webhookUrl, $webhookSecret ?: null, $this->getPluginVersionString());
 
         return true;
+    }
+
+    /**
+     * The installed version of this plugin, for the User-Agent header
+     * (SendWebhookJob has no access to the plugin instance itself, since it
+     * runs out of process on the job queue).
+     */
+    protected function getPluginVersionString(): string
+    {
+        $version = $this->getCurrentVersion();
+
+        return $version ? $version->getVersionString() : 'unknown';
     }
 
     /**
