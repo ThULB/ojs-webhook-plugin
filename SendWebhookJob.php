@@ -19,6 +19,8 @@ use PKP\core\PKPRequest;
 use PKP\db\DAORegistry;
 use PKP\job\exceptions\JobException;
 use PKP\jobs\BaseJob;
+use PKP\submission\PKPSubmission;
+use PKP\userGroup\UserGroup;
 
 class SendWebhookJob extends BaseJob
 {
@@ -121,8 +123,11 @@ class SendWebhookJob extends BaseJob
             ] : null,
             'doi' => $this->getCurrentDoi($publication),
             'authors' => $this->getAuthorsPayload($publication, $locale),
-            // No PDF with a DOI exists yet when a submission is only sent to production.
-            'galleys' => in_array($this->event, ['published', 'updated'], true)
+            // No PDF with a DOI exists yet before the publication is actually published - not just
+            // sent to production: an "updated" webhook can fire for a publication still in
+            // production (e.g. a metadata edit after a "production" send), where the galley/download
+            // URL is not yet publicly reachable.
+            'galleys' => (in_array($this->event, ['published', 'updated'], true) && $publication->getData('status') === PKPSubmission::STATUS_PUBLISHED)
                 ? $this->getGalleysPayload($publication, $request, $journalPath)
                 : null,
         ];
@@ -200,12 +205,28 @@ class SendWebhookJob extends BaseJob
         $authors = [];
 
         foreach ($publication->getData('authors') ?? [] as $author) {
+            $userGroup = $author->getUserGroup();
+
             $authors[] = [
                 'seq' => $author->getSequence(),
-                // OJS has no dedicated author/translator distinction (see README); the
-                // user group name in the submission's language is the closest honest
-                // equivalent available.
-                'role' => $author->getUserGroup()?->getLocalizedData('name', $locale),
+                // OJS has no dedicated author/translator distinction (see README); the user
+                // group name in the submission's language is kept as a display fallback only.
+                // The receiving end should key off userGroupId/roleId instead of guessing from
+                // this string.
+                'role' => $userGroup?->getLocalizedData('name', $locale),
+                'userGroupId' => $author->getUserGroupId(),
+                // The PKP role constant (e.g. 65536 for ROLE_ID_AUTHOR). Note this does NOT
+                // distinguish between user groups that share the same role - e.g. "Author" and a
+                // custom "Translator" group are both ROLE_ID_AUTHOR - so userGroupId remains the
+                // only value that identifies the group itself.
+                'roleId' => $userGroup?->roleId,
+                // Best-effort, locale-independent label: only non-null if the journal actually has
+                // the en_US locale installed (see README). getLocalizedData() falls back to the
+                // "best" available locale by default, which would defeat the point here, so the
+                // lookup is forced to an exact match instead.
+                'roleName' => [
+                    'en' => $userGroup?->getLocalizedData('name', 'en_US', UserGroup::LOCALE_MATCH_STRICT),
+                ],
                 'givenName' => $author->getGivenName($locale),
                 'familyName' => $author->getFamilyName($locale),
                 'orcid' => $author->getData('orcid'),

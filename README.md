@@ -54,13 +54,20 @@ time.
    | `issue.id` / `.volume` / `.number` / `.year` / `.title` / `.datePublished` | `Issue` accessors                |
    | `doi`                  | The DOI already on file in OJS for this publication (`Publication::getData('doiId')` → `Doi::getDoi()`), if any |
    | `authors`              | One entry per contributor (see below)                 |
-   | `galleys`              | `null` for `production` and `unpublished`; one entry per galley for `published`/`updated` |
+   | `galleys`              | `null` unless the publication's own status is `STATUS_PUBLISHED` *and* the event is `published`/`updated`; one entry per galley otherwise. A publication can receive an `updated` webhook while still in production (e.g. a metadata edit after a `production` send) - at that point no galley has a public URL or a registered DOI yet, so `galleys` stays `null` even for `updated`. |
 
-   Each entry in `authors` carries `seq`, `role` (the author's user group
-   name, in `locale` - OJS has no dedicated author/translator field),
-   `givenName`, `familyName`, `orcid`, `orcidVerified`
-   (`Author::getData('orcidIsVerified')`), and `affiliations` (`name` + `ror`,
-   from OJS 3.5's structured affiliation/ROR model).
+   Each entry in `authors` carries:
+
+   | Field          | Source                                                        |
+   |----------------|----------------------------------------------------------------|
+   | `seq`          | `Author::getSequence()`                                        |
+   | `role`         | The author's user group name, in `locale` - display fallback only, **not** meant to be parsed/guessed by the receiving end (OJS has no dedicated author/translator field, and custom groups sharing the same `roleId` are indistinguishable by name alone in every language) |
+   | `userGroupId`  | `Author::getUserGroupId()` - stable, identifies the exact group  |
+   | `roleId`       | `UserGroup::roleId`, one of PKP's `Role::ROLE_ID_*` constants - **does not** distinguish between groups that share a role (e.g. a custom "Translator" group is still `ROLE_ID_AUTHOR`) |
+   | `roleName.en`  | `UserGroup::getLocalizedData('name', 'en_US', strict)` - `null` unless the journal has the `en_US` locale installed, since a custom group only has a translation for the locales an admin filled in (see "Known limitations") |
+   | `givenName` / `familyName` | `Author::getGivenName()` / `getFamilyName()`        |
+   | `orcid` / `orcidVerified` | `Author::getData('orcid'\|'orcidIsVerified')`        |
+   | `affiliations` | `name` + `ror`, from OJS 3.5's structured affiliation/ROR model |
 
    Each entry in `galleys` carries `id`, `label`, `mimeType`, `fileId` and
    `url` (the article download URL).
@@ -157,6 +164,13 @@ rather than falsely reporting success.
   it cannot be included in the `authors` payload. Decided not to add one -
   the `orcid`/`orcidVerified` fields already on each author are considered
   a sufficient identifier.
+- **`roleName.en` depends on the journal's installed locales:** it is only
+  populated if `en_US` is one of the journal's enabled locales (Website
+  Settings > Languages), since a custom user group (e.g. "Translator") has no
+  translation beyond whatever locales an admin actually filled in for it -
+  there is no locale-independent fallback for those. The receiving end should
+  key off `userGroupId`/`roleId` rather than depend on this field being
+  present.
 
 ## Development
 
