@@ -77,8 +77,12 @@ time.
    already set there, in which case the mismatch is logged instead of
    silently overwritten.
 5. `SendWebhookJob` retries up to 5 times (30s / 2min / 10min / 30min
-   backoff) on failure, since the Zeitschriftenserver endpoint is idempotent
-   per `submissionId`/`publicationId` and tolerates repeated requests.
+   backoff) on a network error or a `5xx` response, since the
+   Zeitschriftenserver endpoint is idempotent per `submissionId`/
+   `publicationId`, tolerates repeated requests, and returns `5xx` precisely
+   when it cannot yet say whether the article already exists. Any other
+   non-2xx response (`4xx`) is treated as permanent - the request fails
+   immediately instead of retrying the same rejected request five times.
 6. Every attempt's outcome is recorded in a dedicated `webhook_publication_status`
    table, one row per publication (`WebhookStatus`): the event, whether it
    succeeded, the Zeitschriftenserver's own `id`/`url` and any `warnings` from

@@ -169,7 +169,19 @@ class SendWebhookJob extends BaseJob
         }
 
         if ($statusCode < 200 || $statusCode >= 300) {
-            throw new \Exception("Webhook returned HTTP {$statusCode} for submission {$this->submissionId}: {$result}");
+            $message = "Webhook returned HTTP {$statusCode} for submission {$this->submissionId}: {$result}";
+
+            // A 5xx (or no status at all, e.g. a connection dropped mid-response without curl
+            // reporting its own errno) means the Zeitschriftenserver could not say for sure whether
+            // the article already exists yet, so it is safe - and necessary - to retry. Anything
+            // else (4xx) is a permanent client error: retrying the same request five times would
+            // never produce a different result, so fail immediately instead of exhausting $tries.
+            if ($statusCode >= 500 || $statusCode === 0) {
+                throw new \Exception($message);
+            }
+
+            $this->fail(new \Exception($message));
+            return;
         }
 
         $response = json_decode((string) $result, true);
