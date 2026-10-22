@@ -24,6 +24,15 @@ use PKP\submission\PKPSubmission;
 
 class WebhookPlugin extends GenericPlugin
 {
+    /**
+     * Publication IDs a "published" webhook was already dispatched for in this
+     * request. OJS fires MetadataChanged a second time right after publishing
+     * (IssueGridHandler and the PublishSubmissions scheduled task both do this
+     * in the same request as the PublicationPublished event), which would
+     * otherwise queue a redundant "updated" webhook for the same publication.
+     */
+    protected array $publishedInThisRequest = [];
+
     public function getDisplayName()
     {
         return __('plugins.generic.webhook.displayName');
@@ -73,6 +82,7 @@ class WebhookPlugin extends GenericPlugin
                     $isPublished = $publication->getData('status') === PKPSubmission::STATUS_PUBLISHED;
 
                     if (!$wasPublished && $isPublished) {
+                        $this->publishedInThisRequest[$publication->getId()] = true;
                         $this->dispatchWebhook('published', $submission->getData('contextId'), $submission->getId(), $publication->getId());
                     }
                 }
@@ -84,10 +94,19 @@ class WebhookPlugin extends GenericPlugin
                     $submission = $event->submission;
                     $publication = $submission->getCurrentPublication();
 
+                    if (!empty($this->publishedInThisRequest[$publication->getId()])) {
+                        return;
+                    }
+
                     // Only resend if this publication was already sent at least once
-                    // (tracked via the DOI a prior production/published webhook got
-                    // back) - otherwise the receiving end has nothing to update yet.
-                    if ($publication->getData('doiId')) {
+                    // before - tracked via a recorded zsId, not doiId: the
+                    // Zeitschriftenserver may have accepted the submission without
+                    // being able to mint a DOI (DOI_FAILED/DOI_DISABLED), in which
+                    // case doiId never gets set but a correction still needs to
+                    // reach it. success alone doesn't work either, since it flips
+                    // to false again after any later failed attempt.
+                    $status = WebhookStatus::get($publication->getId());
+                    if ($status && $status['zsId']) {
                         $this->dispatchWebhook('updated', $submission->getData('contextId'), $submission->getId(), $publication->getId());
                     }
                 }

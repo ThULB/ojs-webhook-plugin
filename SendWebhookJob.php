@@ -14,6 +14,7 @@ use APP\core\Application;
 use APP\facades\Repo;
 use APP\oai\ojs\OAIDAO;
 use APP\publication\Publication;
+use PKP\config\Config;
 use PKP\core\PKPRequest;
 use PKP\db\DAORegistry;
 use PKP\job\exceptions\JobException;
@@ -79,7 +80,13 @@ class SendWebhookJob extends BaseJob
         $payload = [
             'event' => $this->event,
             'source' => [
-                'ojsBaseUrl' => $request->getBaseUrl(),
+                // Not $request->getBaseUrl(): that reflects whatever host served
+                // *this* request (or, from a CLI worker, falls back to this same
+                // config value anyway), which can vary across requests behind a
+                // proxy/load balancer. The Zeitschriftenserver identifies articles
+                // by ojsBaseUrl|contextId|submissionId, so an unstable value here
+                // makes it re-create the article under a second DOI.
+                'ojsBaseUrl' => Config::getVar('general', 'base_url'),
                 'journalPath' => $journalPath,
                 'contextId' => $contextId,
             ],

@@ -13,7 +13,7 @@ time.
    |-------------------------|---------------------------------------------------------------------|----------------|
    | `DecisionAdded`         | A submission receives the editorial decision `Decision::SEND_TO_PRODUCTION` ("Send to Production") | `"production"` |
    | `PublicationPublished`  | A publication transitions from *not published* to *published* (`oldPublication.status !== PUBLISHED && publication.status === PUBLISHED`). Re-saving an already-published article does **not** trigger another webhook. | `"published"`  |
-   | `MetadataChanged`       | A submission's metadata is saved, **and** its current publication already has a `doiId` (i.e. it was sent at least once before) | `"updated"`    |
+   | `MetadataChanged`       | A submission's metadata is saved, **and** the Zeitschriftenserver has accepted this publication at least once before (a `zsId` is on record for it - not `doiId`, since the Zeitschriftenserver may have accepted the submission without being able to mint a DOI yet). Skipped if a `"published"` webhook for the same publication was already dispatched earlier in the same request, since OJS fires `MetadataChanged` again right after publishing. | `"updated"`    |
    | `PublicationUnpublished`| A publication is unpublished                                        | `"unpublished"`|
 
    A newly published version of an already-published submission does not
@@ -36,7 +36,7 @@ time.
    | Field                  | Source                                              |
    |------------------------|------------------------------------------------------|
    | `event`                | `"production"`, `"published"`, `"updated"` or `"unpublished"` |
-   | `source.ojsBaseUrl`    | `Request::getBaseUrl()`                              |
+   | `source.ojsBaseUrl`    | `Config::getVar('general', 'base_url')` (stable across requests/hosts, unlike `Request::getBaseUrl()`) |
    | `source.journalPath`   | `Context::getPath()`                                 |
    | `source.contextId`     | `Submission::getData('contextId')`                   |
    | `submissionId`         | -                                                     |
