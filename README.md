@@ -198,6 +198,19 @@ rather than falsely reporting success.
   `SubmissionFile::edit` hook to listen on - so a change to an *existing*
   file revision's own metadata (not a new revision, and not through the
   galley form) would not trigger an `"updated"` webhook.
+- **Deleting a galley's file does not trigger an update either:** OJS core
+  works around a known bug ([pkp/pkp-lib#5740](https://github.com/pkp/pkp-lib/issues/5740))
+  by nulling the galley's `submissionFileId` *in place* before calling
+  `Repo::galley()->edit()` (`classes/submissionFile/Repository.php`,
+  `deleteRelatedSubmissionFileObjects()`). By the time `Galley::edit` fires,
+  both the "old" and "new" galley objects already report
+  `submissionFileId: null`, so the content-change check above sees no
+  difference and skips the webhook. Net effect: removing the underlying file
+  of a published galley (leaving an empty galley behind, as opposed to
+  replacing the file) is not reported. Narrow edge case, left as a known
+  limitation rather than special-cased against a core workaround that could
+  change at any time; `SubmissionFileDeleted` (already fired by core) would
+  be the hook to add this through if it turns out to matter in practice.
 - **No GND field for authors:** OJS has no built-in GND identifier field, so
   it cannot be included in the `authors` payload. Decided not to add one -
   the `orcid`/`orcidVerified` fields already on each author are considered
