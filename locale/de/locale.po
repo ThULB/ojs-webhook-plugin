@@ -127,3 +127,12 @@ msgstr "Zu dieser Einreichung gibt es im Zeitschriftenserver keinen Artikel."
 
 msgid "plugins.generic.webhook.warning.unpublishedInOjs"
 msgstr "Diese Einreichung wurde in OJS zurückgezogen; der Artikel und seine DOI bleiben im Zeitschriftenserver bestehen."
+
+msgid "plugins.generic.webhook.warning.unknownRole"
+msgstr "Eine Autorin/ein Autor mit einer selbst angelegten Benutzergruppe wurde als normale/r Autor/in verknüpft."
+
+msgid "plugins.generic.webhook.warning.galleySkipped"
+msgstr "Eine Fahne wurde übersprungen, da sie kein PDF ist oder keine Datei hat."
+
+msgid "plugins.generic.webhook.warning.galleyFailed"
+msgstr "Das PDF einer Fahne konnte nicht von OJS heruntergeladen werden."

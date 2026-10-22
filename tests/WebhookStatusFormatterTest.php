@@ -31,6 +31,9 @@ class WebhookStatusFormatterTest extends TestCase
             'DOI_MISMATCH' => ['DOI_MISMATCH', 'plugins.generic.webhook.warning.doiMismatch'],
             'UNKNOWN_SUBMISSION' => ['UNKNOWN_SUBMISSION', 'plugins.generic.webhook.warning.unknownSubmission'],
             'UNPUBLISHED_IN_OJS' => ['UNPUBLISHED_IN_OJS', 'plugins.generic.webhook.warning.unpublishedInOjs'],
+            'UNKNOWN_ROLE' => ['UNKNOWN_ROLE', 'plugins.generic.webhook.warning.unknownRole'],
+            'GALLEY_SKIPPED' => ['GALLEY_SKIPPED', 'plugins.generic.webhook.warning.galleySkipped'],
+            'GALLEY_FAILED' => ['GALLEY_FAILED', 'plugins.generic.webhook.warning.galleyFailed'],
         ];
     }
 

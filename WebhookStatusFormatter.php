@@ -31,6 +31,9 @@ class WebhookStatusFormatter
         'DOI_MISMATCH' => 'plugins.generic.webhook.warning.doiMismatch',
         'UNKNOWN_SUBMISSION' => 'plugins.generic.webhook.warning.unknownSubmission',
         'UNPUBLISHED_IN_OJS' => 'plugins.generic.webhook.warning.unpublishedInOjs',
+        'UNKNOWN_ROLE' => 'plugins.generic.webhook.warning.unknownRole',
+        'GALLEY_SKIPPED' => 'plugins.generic.webhook.warning.galleySkipped',
+        'GALLEY_FAILED' => 'plugins.generic.webhook.warning.galleyFailed',
     ];
 
     /**

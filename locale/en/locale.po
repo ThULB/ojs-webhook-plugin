@@ -127,3 +127,12 @@ msgstr "No article exists for this submission in the Zeitschriftenserver."
 
 msgid "plugins.generic.webhook.warning.unpublishedInOjs"
 msgstr "This submission was withdrawn in OJS; the article and its DOI remain in the Zeitschriftenserver."
+
+msgid "plugins.generic.webhook.warning.unknownRole"
+msgstr "An author with a custom user group (no roleKey) was linked as a regular author."
+
+msgid "plugins.generic.webhook.warning.galleySkipped"
+msgstr "A galley was skipped because it is not a PDF or has no file."
+
+msgid "plugins.generic.webhook.warning.galleyFailed"
+msgstr "A galley's PDF could not be downloaded from OJS."
