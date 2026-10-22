@@ -7,13 +7,14 @@ time.
 
 ## How it works
 
-1. The plugin registers four listeners, each sending a different `event`:
+1. The plugin registers six listeners, each sending a different `event`:
 
    | Listener                | Fires when                                                        | `event`        |
    |-------------------------|---------------------------------------------------------------------|----------------|
    | `DecisionAdded`         | A submission receives the editorial decision `Decision::SEND_TO_PRODUCTION` ("Send to Production") | `"production"` |
    | `PublicationPublished`  | A publication transitions from *not published* to *published* (`oldPublication.status !== PUBLISHED && publication.status === PUBLISHED`). Re-saving an already-published article does **not** trigger another webhook. | `"published"`  |
    | `MetadataChanged`       | A submission's metadata is saved, **and** the Zeitschriftenserver has accepted this publication at least once before (a `zsId` is on record for it - not `doiId`, since the Zeitschriftenserver may have accepted the submission without being able to mint a DOI yet). Skipped if a `"published"` webhook for the same publication was already dispatched earlier in the same request, since OJS fires `MetadataChanged` again right after publishing. | `"updated"`    |
+   | `Galley::add` / `Galley::edit` | A galley is added or edited directly on the galley ("Fahnen") form on an **already-published** publication with a `zsId` on record. Unlike the upload wizard's `saveMetadata()` action, editing a galley this way does not fire `MetadataChanged` on its own (see "Known limitations"), so a corrected galley/PDF would otherwise never reach the Zeitschriftenserver. | `"updated"`    |
    | `PublicationUnpublished`| A publication is unpublished                                        | `"unpublished"`|
 
    A newly published version of an already-published submission does not
@@ -160,6 +161,13 @@ rather than falsely reporting success.
   (`localhost`, `127.0.0.1` are accepted on purpose), but it widens the
   attack surface in production if a journal manager can enter arbitrary
   URLs.
+- **A replaced file without a galley/metadata change is not caught:** OJS's
+  core `SubmissionFile` repository fires hooks for `add`/`delete` but not for
+  `edit` - there is no `SubmissionFile::edit` hook to listen on. Replacing a
+  galley's file through means that don't also go through `Galley::edit` (e.g.
+  a bare file swap wired up by a custom workflow) will not trigger an
+  `"updated"` webhook. Covered: edits made via the galley ("Fahnen") form,
+  which does call `Repo::galley()->edit()`.
 - **No GND field for authors:** OJS has no built-in GND identifier field, so
   it cannot be included in the `authors` payload. Decided not to add one -
   the `orcid`/`orcidVerified` fields already on each author are considered

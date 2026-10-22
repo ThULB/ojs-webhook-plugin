@@ -12,6 +12,7 @@ use PKP\components\forms\FieldHTML;
 use PKP\components\forms\FormComponent;
 use PKP\context\Context;
 use PKP\core\JSONMessage;
+use PKP\galley\Galley;
 use PKP\linkAction\LinkAction;
 use PKP\linkAction\request\AjaxModal;
 use PKP\observers\events\DecisionAdded;
@@ -119,6 +120,18 @@ class WebhookPlugin extends GenericPlugin
                 }
             );
 
+            Hook::add('Galley::add', function (string $hookName, array $args) {
+                /** @var Galley $galley */
+                $galley = $args[0];
+                $this->handleGalleyChanged($galley->getData('publicationId'));
+            });
+
+            Hook::add('Galley::edit', function (string $hookName, array $args) {
+                /** @var Galley $newGalley */
+                $newGalley = $args[0];
+                $this->handleGalleyChanged($newGalley->getData('publicationId'));
+            });
+
             Hook::add('Publication::validatePublish', function (string $hookName, array $args) {
                 $errors = & $args[0];
                 /** @var Publication $publication */
@@ -213,6 +226,40 @@ class WebhookPlugin extends GenericPlugin
         $event = $status['event'] ?? 'updated';
 
         return $this->dispatchWebhook($event, $submission->getData('contextId'), $submissionId, $publication->getId());
+    }
+
+    /**
+     * React to a galley being added or edited directly on the Fahnen/galley form, which (unlike
+     * the upload wizard's PKPManageFileApiHandler::saveMetadata()) does not fire MetadataChanged.
+     * Without this, a corrected galley (e.g. a replaced PDF) on an already-published publication
+     * never reaches the Zeitschriftenserver.
+     *
+     * Sends the same "updated" webhook as MetadataChanged, under the same condition: only once the
+     * publication is actually published, and only if it was already accepted by the
+     * Zeitschriftenserver at least once before (a zsId on record).
+     */
+    protected function handleGalleyChanged(?int $publicationId): void
+    {
+        if (!$publicationId) {
+            return;
+        }
+
+        $publication = Repo::publication()->get($publicationId);
+        if (!$publication || $publication->getData('status') !== PKPSubmission::STATUS_PUBLISHED) {
+            return;
+        }
+
+        $submission = Repo::submission()->get($publication->getData('submissionId'));
+        if (!$submission) {
+            return;
+        }
+
+        $status = WebhookStatus::get($publicationId);
+        if (!$status || !$status['zsId']) {
+            return;
+        }
+
+        $this->dispatchWebhook('updated', $submission->getData('contextId'), $submission->getId(), $publicationId);
     }
 
     /**
