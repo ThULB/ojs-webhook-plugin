@@ -80,7 +80,15 @@ time.
 4. If the response body contains a `doi` field, the job records it on the
    publication (`Repo::doi()->add()` + `doiId`) unless a *different* DOI is
    already set there, in which case the mismatch is logged instead of
-   silently overwritten.
+   silently overwritten. The publication is re-read right before recording
+   the DOI, since `Repo::publication()->edit()` writes back every field of
+   the object it is given - reusing the copy loaded before the HTTP request
+   would revert any edit saved while the request was in flight.
+   The response body is parsed leniently (`WebhookPayload::normalizeResponse()`):
+   a body that is not a JSON object, or a `doi`/`id`/`url`/`warnings` field
+   of an unexpected type, is treated as absent rather than failing the job -
+   the request was already delivered, so failing would only make the queue
+   re-send it.
 5. `SendWebhookJob` retries up to 5 times (30s / 2min / 10min / 30min
    backoff) on a network error or a `5xx` response, since the
    Zeitschriftenserver endpoint is idempotent per `submissionId`/
@@ -242,8 +250,8 @@ rather than falsely reporting success.
 
 `WebhookUrlValidator` (the http(s)-only URL check shared by `WebhookPlugin`'s
 enable-gate and `WebhookSettingsForm`'s field validator), `WebhookPayload`
-(date formatting, keyword reduction and HMAC signature computation used by
-`SendWebhookJob`), `WebhookStatusFormatter` (warning-code formatting used
+(date formatting, keyword reduction, HMAC signature computation and response
+normalization used by `SendWebhookJob`), `WebhookStatusFormatter` (warning-code formatting used
 by `WebhookPlugin::formatStatusHtml()`) and `WebhookEventGuard` (the
 stale-event check used by `SendWebhookJob` and the resend action) have no OJS/PKP dependency and are
 covered by a PHPUnit suite that runs standalone, without an OJS installation:
@@ -267,7 +275,7 @@ webhook/
 ├── WebhookStatus.php           Reads/writes the per-publication status row
 ├── WebhookStatusMigration.php  Creates the webhook_publication_status table
 ├── WebhookUrlValidator.php     Shared http(s) URL validation
-├── WebhookPayload.php          Pure payload helpers (date format, keywords, HMAC signature)
+├── WebhookPayload.php          Pure payload helpers (date format, keywords, HMAC signature, response parsing)
 ├── WebhookStatusFormatter.php  Pure warning-code formatting for the status display
 ├── WebhookEventGuard.php       Pure check whether a queued event is outdated
 ├── SendWebhookJob.php          Async queue job for the HTTP POST

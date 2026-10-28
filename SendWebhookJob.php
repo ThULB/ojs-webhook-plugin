@@ -192,15 +192,15 @@ class SendWebhookJob extends BaseJob
             return;
         }
 
-        $response = json_decode((string) $result, true);
-        $this->recordDoiFromResponse($publication, $contextId, $response);
+        $response = WebhookPayload::normalizeResponse(json_decode((string) $result, true));
+        $this->recordDoiFromResponse($response['doi'], $contextId);
 
         WebhookStatus::recordSuccess(
             $this->publicationId,
             $this->event,
-            $response['id'] ?? null,
-            $response['url'] ?? null,
-            $response['warnings'] ?? []
+            $response['id'],
+            $response['url'],
+            $response['warnings']
         );
     }
 
@@ -323,11 +323,20 @@ class SendWebhookJob extends BaseJob
      * before the article is published. Never overwrites a DOI that already differs
      * from the one reported back, since that would silently discard an existing
      * registration; such a mismatch is logged for manual follow-up instead.
+     *
+     * Re-fetches the publication instead of reusing the one handle() loaded before the HTTP
+     * request: Repo::publication()->edit() writes back *every* field of the object it is given,
+     * so a stale copy would silently revert anything an editor saved while the request (up to
+     * CURLOPT_TIMEOUT) was in flight.
      */
-    protected function recordDoiFromResponse(Publication $publication, int $contextId, ?array $response): void
+    protected function recordDoiFromResponse(?string $doi, int $contextId): void
     {
-        $doi = $response['doi'] ?? null;
         if (!$doi) {
+            return;
+        }
+
+        $publication = Repo::publication()->get($this->publicationId);
+        if (!$publication) {
             return;
         }
 

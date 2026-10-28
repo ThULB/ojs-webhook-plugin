@@ -55,4 +55,39 @@ class WebhookPayload
 
         return hash_hmac('sha256', $body, $secret);
     }
+
+    /**
+     * Reduce a decoded 2xx response body to the fields SendWebhookJob uses, each of a known type:
+     * `doi`/`id`/`url` as non-empty strings or null, `warnings` as a list of `{code, detail}` with
+     * a string `code`.
+     *
+     * By the time the body is parsed, the webhook has already been delivered - a body that is not
+     * a JSON object (e.g. `"ok"`, `true`, or invalid JSON), or a field of an unexpected type, must
+     * therefore never throw: that would make the queue retry, and re-send, a request the receiving
+     * end already processed, and finally record it as failed.
+     */
+    public static function normalizeResponse(mixed $decoded): array
+    {
+        if (!is_array($decoded)) {
+            $decoded = [];
+        }
+
+        $string = fn ($value) => (is_string($value) || is_int($value) || is_float($value)) && (string) $value !== ''
+            ? (string) $value
+            : null;
+
+        $warnings = is_array($decoded['warnings'] ?? null) ? $decoded['warnings'] : [];
+
+        return [
+            'doi' => $string($decoded['doi'] ?? null),
+            'id' => $string($decoded['id'] ?? null),
+            'url' => $string($decoded['url'] ?? null),
+            'warnings' => array_values(array_filter(array_map(
+                fn ($warning) => is_array($warning) && $string($warning['code'] ?? null) !== null
+                    ? ['code' => $string($warning['code']), 'detail' => $string($warning['detail'] ?? null)]
+                    : null,
+                $warnings
+            ))),
+        ];
+    }
 }

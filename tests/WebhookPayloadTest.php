@@ -91,4 +91,57 @@ class WebhookPayloadTest extends TestCase
             WebhookPayload::signatureValue($body, 'secret-two')
         );
     }
+
+    #[DataProvider('responseProvider')]
+    public function testNormalizeResponse(mixed $input, array $expected): void
+    {
+        $this->assertSame($expected, WebhookPayload::normalizeResponse($input));
+    }
+
+    public static function responseProvider(): array
+    {
+        $empty = ['doi' => null, 'id' => null, 'url' => null, 'warnings' => []];
+
+        return [
+            'invalid JSON (json_decode returns null)' => [null, $empty],
+            'JSON string body' => ['accepted', $empty],
+            'JSON boolean body' => [true, $empty],
+            'JSON number body' => [1, $empty],
+            'empty object' => [[], $empty],
+            'complete response' => [
+                [
+                    'doi' => '10.1234/abc',
+                    'id' => 'jportal_jparticle_00000001',
+                    'url' => 'https://zs.example/receive/jportal_jparticle_00000001',
+                    'warnings' => [['code' => 'NO_PAGES', 'detail' => 'No pages given']],
+                ],
+                [
+                    'doi' => '10.1234/abc',
+                    'id' => 'jportal_jparticle_00000001',
+                    'url' => 'https://zs.example/receive/jportal_jparticle_00000001',
+                    'warnings' => [['code' => 'NO_PAGES', 'detail' => 'No pages given']],
+                ],
+            ],
+            'numeric id is cast to string' => [
+                ['id' => 42],
+                ['doi' => null, 'id' => '42', 'url' => null, 'warnings' => []],
+            ],
+            'fields of unexpected type become null' => [
+                ['doi' => ['10.1234/abc'], 'id' => ['x' => 1], 'url' => false],
+                $empty,
+            ],
+            'empty strings become null' => [
+                ['doi' => '', 'id' => '', 'url' => ''],
+                $empty,
+            ],
+            'warnings that are not a list are dropped' => [
+                ['warnings' => 'NO_PAGES'],
+                $empty,
+            ],
+            'malformed warning entries are dropped and the rest reindexed' => [
+                ['warnings' => ['NO_PAGES', ['detail' => 'no code'], ['code' => ['x']], ['code' => 'NO_ISSUE']]],
+                ['doi' => null, 'id' => null, 'url' => null, 'warnings' => [['code' => 'NO_ISSUE', 'detail' => null]]],
+            ],
+        ];
+    }
 }
