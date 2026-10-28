@@ -283,7 +283,6 @@ webhook/
 ├── WebhookEventGuard.php       Pure check whether a queued event is outdated
 ├── SendWebhookJob.php          Async queue job for the HTTP POST
 ├── settings.xml                Install defaults (enabled = false)
-├── CHANGELOG.md                Release notes per version
 ├── version.xml                 Plugin version information
 ├── templates/settings.tpl      Smarty template for the settings form
 ├── templates/resend.tpl        Smarty template for the resend form
