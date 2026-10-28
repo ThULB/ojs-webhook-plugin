@@ -45,6 +45,8 @@ class WebhookPlugin extends GenericPlugin
 
         if (!$this->hasValidWebhookConfig()) {
             $description .= ' ' . __('plugins.generic.webhook.description.requiresConfig');
+        } elseif (!WebhookStatus::tableExists()) {
+            $description .= ' ' . __('plugins.generic.webhook.description.missingStatusTable');
         } elseif (!$this->hasRecommendedDoiConfig()) {
             $description .= ' ' . __('plugins.generic.webhook.description.doiConfigWarning');
         }
@@ -61,7 +63,14 @@ class WebhookPlugin extends GenericPlugin
             return false;
         }
 
-        if ($this->getEnabled($mainContextId)) {
+        // Listeners are registered unconditionally and each one checks whether the plugin is
+        // enabled for the *submission's* journal instead (see dispatchWebhook()). Gating on
+        // getEnabled($mainContextId) here would skip registration entirely in the CLI scheduler:
+        // it loads generic plugins without a context, so getEnabled() reads the site-level
+        // (context 0) setting, which is never set for a journal-level plugin - and the
+        // PublishSubmissions task would then publish scheduled articles across all journals
+        // without a single "published" webhook going out.
+        if (Application::isInstalled()) {
             Event::listen(
                 DecisionAdded::class,
                 function (DecisionAdded $event) {
@@ -151,7 +160,7 @@ class WebhookPlugin extends GenericPlugin
 
                 $contextId = $submission->getData('contextId');
 
-                if (!$this->getSetting($contextId, 'requireDoiBeforePublish')) {
+                if (!$this->getEnabled($contextId) || !$this->getSetting($contextId, 'requireDoiBeforePublish')) {
                     return Hook::CONTINUE;
                 }
 
@@ -163,7 +172,7 @@ class WebhookPlugin extends GenericPlugin
             });
 
             Hook::add('Form::config::before', function (string $hookName, FormComponent $form) {
-                if ($form->id !== 'publicationIdentifiers') {
+                if ($form->id !== 'publicationIdentifiers' || !$this->getEnabled()) {
                     return;
                 }
 
@@ -241,7 +250,18 @@ class WebhookPlugin extends GenericPlugin
         $status = WebhookStatus::get($publication->getId());
         $event = $status['event'] ?? 'updated';
 
-        return $this->dispatchWebhook($event, $submission->getData('contextId'), $submissionId, $publication->getId());
+        // The last recorded event may no longer match the publication's state (e.g. "production"
+        // for an article published since, or "published" after it was unpublished but that
+        // webhook failed). SendWebhookJob would silently drop such a job as stale, so send the
+        // event matching the current state instead.
+        $isPublished = $publication->getData('status') === PKPSubmission::STATUS_PUBLISHED;
+        if (WebhookEventGuard::isStale($event, $isPublished, $event)) {
+            $event = $isPublished ? 'published' : 'unpublished';
+        }
+
+        // An explicit manual action - deliberately gated only on a URL being configured, not on
+        // the plugin being enabled (unlike the automatic listeners, see dispatchWebhook()).
+        return $this->queueWebhookJob($event, $submission->getData('contextId'), $submissionId, $publication->getId());
     }
 
     /**
@@ -295,10 +315,26 @@ class WebhookPlugin extends GenericPlugin
     }
 
     /**
+     * Queue a webhook notification for an editorial event, if the plugin is enabled for the
+     * submission's journal. Checked per journal rather than once at register() time: the CLI
+     * scheduler registers plugins without any context, and a single request (e.g. the
+     * scheduled-task runner) can publish submissions of several journals, not all of which
+     * necessarily have this plugin enabled.
+     */
+    protected function dispatchWebhook(string $event, int $contextId, int $submissionId, int $publicationId): bool
+    {
+        if (!$this->getEnabled($contextId)) {
+            return false;
+        }
+
+        return $this->queueWebhookJob($event, $contextId, $submissionId, $publicationId);
+    }
+
+    /**
      * Queue a webhook notification for an asynchronous send, if a webhook URL is
      * configured. Returns whether a job was actually queued.
      */
-    protected function dispatchWebhook(string $event, int $contextId, int $submissionId, int $publicationId): bool
+    protected function queueWebhookJob(string $event, int $contextId, int $submissionId, int $publicationId): bool
     {
         if (!$this->hasValidWebhookConfig($contextId)) {
             return false;

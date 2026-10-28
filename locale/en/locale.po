@@ -20,6 +20,9 @@ msgstr "Sends an HTTP webhook with the article's metadata whenever a submission 
 msgid "plugins.generic.webhook.description.requiresConfig"
 msgstr "Configure a webhook URL in the plugin settings before this plugin can be enabled."
 
+msgid "plugins.generic.webhook.description.missingStatusTable"
+msgstr "The status table webhook_publication_status is missing, so delivery status is not recorded and \"updated\" webhooks are not sent. Run php tools/installPluginVersion.php plugins/generic/webhook/version.xml once."
+
 msgid "plugins.generic.webhook.description.doiConfigWarning"
 msgstr "This journal's DOI settings do not match what the receiving endpoint expects (DOIs enabled for publications, assigned manually, never auto-generated) - the DOI it returns may not be recorded correctly."
 

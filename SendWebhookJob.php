@@ -55,6 +55,14 @@ class SendWebhookJob extends BaseJob
             throw new JobException(JobException::INVALID_PAYLOAD);
         }
 
+        // Checked on every attempt, not just the first: a retry delayed by backoff() may run after
+        // a newer job for this publication was delivered. Return without recording anything, so
+        // the status row keeps reflecting that newer delivery.
+        $isPublished = $publication->getData('status') === PKPSubmission::STATUS_PUBLISHED;
+        if (WebhookEventGuard::isStale($this->event, $isPublished, WebhookStatus::get($this->publicationId)['event'] ?? null)) {
+            return;
+        }
+
         $contextId = $submission->getData('contextId');
 
         $issue = null;

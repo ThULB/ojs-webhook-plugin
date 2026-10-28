@@ -20,6 +20,9 @@ msgstr "Sendet bei Veröffentlichung einer Einreichung einen HTTP-Webhook mit de
 msgid "plugins.generic.webhook.description.requiresConfig"
 msgstr "Bitte richten Sie in den Plugin-Einstellungen eine Webhook-URL ein, bevor Sie dieses Plugin aktivieren."
 
+msgid "plugins.generic.webhook.description.missingStatusTable"
+msgstr "Die Statustabelle webhook_publication_status fehlt, daher wird der Versandstatus nicht gespeichert und es werden keine \"updated\"-Webhooks gesendet. Bitte einmalig php tools/installPluginVersion.php plugins/generic/webhook/version.xml ausführen."
+
 msgid "plugins.generic.webhook.description.doiConfigWarning"
 msgstr "Die DOI-Einstellungen dieser Zeitschrift entsprechen nicht dem, was die Gegenstelle erwartet (DOIs für Publikationen aktiviert, manuell vergeben, nie automatisch erzeugt) - die von dort zurückgemeldete DOI wird möglicherweise nicht korrekt übernommen."
 

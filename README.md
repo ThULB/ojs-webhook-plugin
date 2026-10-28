@@ -21,10 +21,14 @@ time.
    need a dedicated trigger: it fires the existing `PublicationPublished`
    listener again, and the payload's `version` field tells the receiving end
    it supersedes the previous one.
-2. If a valid `webhookUrl` is configured, a `SendWebhookJob` is queued on the
-   OJS job queue for the matching event. The actual HTTP request therefore
-   runs asynchronously and does not block the editorial action in the
-   backend.
+2. If the plugin is enabled for the submission's journal and a valid
+   `webhookUrl` is configured there, a `SendWebhookJob` is queued on the OJS
+   job queue for the matching event. The actual HTTP request therefore runs
+   asynchronously and does not block the editorial action in the backend.
+   The listeners themselves are always registered and check the enabled flag
+   per journal, so this also works for the CLI scheduler (which loads
+   plugins without a journal context) - in particular for articles published
+   on their scheduled date by the `PublishSubmissions` task.
 3. The job loads the submission, publication, issue, section and journal and
    sends the following JSON payload via `POST`, with a `User-Agent` header
    (required - MyCoRe-based endpoints reject requests without one; carries
@@ -84,6 +88,13 @@ time.
    when it cannot yet say whether the article already exists. Any other
    non-2xx response (`4xx`) is treated as permanent - the request fails
    immediately instead of retrying the same rejected request five times.
+   Before every attempt, the job checks whether its event has been overtaken
+   by the publication's current state (`WebhookEventGuard`) and, if so,
+   drops it without sending or recording anything: a `published` (or
+   `production`) retry for a publication that has since been unpublished
+   (or published), an `unpublished` retry for one published again, or an
+   `updated` retry after an unpublish was recorded. Otherwise a delayed retry
+   could arrive after a newer delivery and revert it on the receiving end.
 6. Every attempt's outcome is recorded in a dedicated `webhook_publication_status`
    table, one row per publication (`WebhookStatus`): the event, whether it
    succeeded, the Zeitschriftenserver's own `id`/`url` and any `warnings` from
@@ -161,7 +172,11 @@ iD, which has two effects on the Zeitschriftenserver side:
 The gear-icon area in the plugin grid also has a "Resend webhook" action.
 Enter a submission ID (as shown in its URL) to re-dispatch the webhook for
 that submission's current publication, using whatever `event` was last sent
-for it (or `"updated"` if it was never sent before). Useful after a
+for it (or `"updated"` if it was never sent before). If that last event no
+longer matches the publication's state (e.g. `"production"` for an article
+published since), `"published"` or `"unpublished"` is sent instead, matching
+the current state. Unlike the automatic listeners, this works even while the
+plugin is disabled, as long as a webhook URL is configured. Useful after a
 permanently failed delivery, or after fixing the configured webhook URL.
 This action is shown regardless of whether a valid webhook URL is currently
 configured; if none is, nothing is queued and an error notification says so
@@ -178,7 +193,10 @@ rather than falsely reporting success.
   On an *existing* installation, re-run
   `php tools/installPluginVersion.php plugins/generic/webhook/version.xml`
   after updating the plugin's files to create/update it (idempotent - safe
-  to run again on a later update that doesn't change the schema).
+  to run again on a later update that doesn't change the schema). Until
+  then the plugin keeps working without it - no status is shown or recorded,
+  and therefore no `updated` webhooks are sent - and the plugin description
+  in the plugin grid points out the missing step.
 
 ## Known limitations / open items
 
@@ -225,8 +243,9 @@ rather than falsely reporting success.
 `WebhookUrlValidator` (the http(s)-only URL check shared by `WebhookPlugin`'s
 enable-gate and `WebhookSettingsForm`'s field validator), `WebhookPayload`
 (date formatting, keyword reduction and HMAC signature computation used by
-`SendWebhookJob`) and `WebhookStatusFormatter` (warning-code formatting used
-by `WebhookPlugin::formatStatusHtml()`) have no OJS/PKP dependency and are
+`SendWebhookJob`), `WebhookStatusFormatter` (warning-code formatting used
+by `WebhookPlugin::formatStatusHtml()`) and `WebhookEventGuard` (the
+stale-event check used by `SendWebhookJob` and the resend action) have no OJS/PKP dependency and are
 covered by a PHPUnit suite that runs standalone, without an OJS installation:
 
 ```
@@ -250,11 +269,12 @@ webhook/
 ├── WebhookUrlValidator.php     Shared http(s) URL validation
 ├── WebhookPayload.php          Pure payload helpers (date format, keywords, HMAC signature)
 ├── WebhookStatusFormatter.php  Pure warning-code formatting for the status display
+├── WebhookEventGuard.php       Pure check whether a queued event is outdated
 ├── SendWebhookJob.php          Async queue job for the HTTP POST
 ├── settings.xml                Install defaults (enabled = false)
 ├── version.xml                 Plugin version information
 ├── templates/settings.tpl      Smarty template for the settings form
 ├── templates/resend.tpl        Smarty template for the resend form
 ├── locale/{de,en}/locale.po    Translations
-└── tests/                      PHPUnit tests (WebhookUrlValidator, WebhookPayload, WebhookStatusFormatter; see Development)
+└── tests/                      PHPUnit tests (WebhookUrlValidator, WebhookPayload, WebhookStatusFormatter, WebhookEventGuard; see Development)
 ```
