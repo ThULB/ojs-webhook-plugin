@@ -7,7 +7,7 @@ time.
 
 ## How it works
 
-1. The plugin registers six listeners, each sending a different `event`:
+1. The plugin registers seven listeners, each sending a different `event`:
 
    | Listener                | Fires when                                                        | `event`        |
    |-------------------------|---------------------------------------------------------------------|----------------|
@@ -15,6 +15,7 @@ time.
    | `PublicationPublished`  | A publication transitions from *not published* to *published* (`oldPublication.status !== PUBLISHED && publication.status === PUBLISHED`). Re-saving an already-published article does **not** trigger another webhook. | `"published"`  |
    | `MetadataChanged`       | A submission's metadata is saved, **and** the Zeitschriftenserver has accepted this publication at least once before (a `zsId` is on record for it - not `doiId`, since the Zeitschriftenserver may have accepted the submission without being able to mint a DOI yet). Skipped if a `"published"` webhook for the same publication was already dispatched earlier in the same request, since OJS fires `MetadataChanged` again right after publishing. | `"updated"`    |
    | `Galley::add` / `Galley::edit` | A galley is added (with its file or remote URL already set - a file-based galley created through the galley form gets its file only on the following upload, which is then caught as an edit), or edited with an actual change to its `label`, `locale`, `submissionFileId` or `urlRemote` (not e.g. a drag-and-drop reorder, which only changes `seq`), on an **already-published** publication with a `zsId` on record. Unlike the upload wizard's `saveMetadata()` action, editing a galley this way does not fire `MetadataChanged` on its own (see "Known limitations"), so a corrected galley/PDF would otherwise never reach the Zeitschriftenserver. | `"updated"`    |
+   | `SubmissionFile::edit` | A new revision of a galley's file is uploaded (the galley grid's "Upload file" action on a galley that already has a file), under the same conditions as above. This replaces the PDF without changing the galley's `submissionFileId` - only the submission file's `fileId` changes - so `Galley::edit` does not fire for it, and `MetadataChanged` only follows if the editor also completes the upload wizard's metadata step (in which case a second, redundant `"updated"` is sent). | `"updated"`    |
    | `PublicationUnpublished`| A publication is unpublished                                        | `"unpublished"`|
 
    A newly published version of an already-published submission does not
@@ -75,8 +76,14 @@ time.
    | `orcid` / `orcidVerified` | `Author::getData('orcid'\|'orcidIsVerified')`        |
    | `affiliations` | `name` + `ror`, from OJS 3.5's structured affiliation/ROR model |
 
-   Each entry in `galleys` carries `id`, `label`, `mimeType`, `fileId` and
-   `url` (the article download URL).
+   Each entry in `galleys` carries `id`, `label`, `mimeType`, `fileId`,
+   `submissionFileId` and `url` (the article download URL). `fileId` is the
+   id of the current file *revision* (`SubmissionFile::getData('fileId')`):
+   it changes whenever the galley's PDF is replaced, which is what the
+   receiving end compares to decide whether to fetch the file again.
+   `submissionFileId` is the galley's submission file, which stays the same
+   across revisions. (Released versions up to 0.2.0.0 sent the
+   `submissionFileId` as `fileId`, so a replaced PDF was never picked up.)
 4. If the response body contains a `doi` field, the job records it on the
    publication (`Repo::doi()->add()` + `doiId`) unless a *different* DOI
    (compared case-insensitively, as DOIs are) is
@@ -98,7 +105,14 @@ time.
    when it cannot yet say whether the article already exists. Any other
    non-2xx response (other `4xx`, and `3xx` - redirects are not followed) is
    treated as permanent - the request fails immediately instead of retrying
-   the same rejected request five times.
+   the same rejected request five times. `$maxExceptions` is raised to 5
+   along with `$tries` (`BaseJob` defaults it to 3, which would otherwise end
+   the job after the third attempt). Each request waits up to 75s for an
+   answer (`CURLOPT_TIMEOUT`, job `$timeout` 90s): the Zeitschriftenserver
+   imports one article at a time and itself waits up to 60s before answering
+   `503`, so after publishing a whole issue its answers can take a while - a
+   shorter timeout would give up on, and later re-send, requests it is still
+   processing.
    Before every attempt, the job checks whether its event has been overtaken
    by the publication's current state (`WebhookEventGuard`) and, if so,
    drops it without sending or recording anything: a `published` (or
@@ -132,12 +146,19 @@ Settings are stored per journal (context).
 | Field                       | Required | Description                                                      |
 |-----------------------------|----------|-------------------------------------------------------------------|
 | Webhook URL                 | no*      | Target URL for the `POST` request. `http://localhost:<port>/...` is accepted for local development. May be left empty to reset the configuration (see below). For a Zeitschriftenserver (MyCoRe) endpoint, this includes that journal's own journal ID (e.g. `.../rsc/ojs/jportal_jpjournal_00002373`). |
-| Webhook Secret              | no       | Used to sign each request (`X-Webhook-Signature` header); see "How it works" above. Never displayed again once saved: the field stays empty, saving it empty keeps the current secret, and a separate checkbox removes it. |
+| Webhook Secret              | no**     | Used to sign each request (`X-Webhook-Signature` header); see "How it works" above. Never displayed again once saved: the field stays empty, saving it empty keeps the current secret, and a separate checkbox removes it. |
 | Require DOI before publish  | no       | If checked, blocks publishing a submission until a DOI has been recorded for it (see `Publication::validatePublish` in "How it works"). |
 
 \* The field can be saved empty (e.g. to clear a previously configured URL),
 but a syntactically valid URL must be present before the plugin can be
 enabled.
+
+\*\* Optional for the plugin, but **required by the Zeitschriftenserver
+(JPortal)**: its endpoint only accepts signed requests. It answers `404` for
+a journal that has no secret configured on its side
+(`JP.OJS.Journal.<journal id>.Secret` in its MyCoRe properties) and `401` for
+a missing or wrong signature - both permanent failures here. The secret must
+be the same value on both sides.
 
 The plugin grid also warns in the plugin description if the current
 journal's DOI settings don't match what the receiving end expects: DOIs
@@ -216,16 +237,11 @@ rather than falsely reporting success.
   (`localhost`, `127.0.0.1` are accepted on purpose), but it widens the
   attack surface in production if a journal manager can enter arbitrary
   URLs.
-- **A galley file replacement is covered indirectly, not a bare metadata edit
-  on an existing file revision:** uploading a new revision of a galley's file
-  goes through `SubmissionFileRepository::add()`, which itself calls
-  `Repo::galley()->edit()` to point the galley at the new revision - so the
-  normal "replace this galley's PDF" action is caught by the `Galley::edit`
-  listener above. What is *not* caught: OJS's core `SubmissionFile`
-  repository fires hooks for `add`/`delete` but not for `edit` - there is no
-  `SubmissionFile::edit` hook to listen on - so a change to an *existing*
-  file revision's own metadata (not a new revision, and not through the
-  galley form) would not trigger an `"updated"` webhook.
+- **Only file changes of a galley's submission file trigger an update, not
+  its metadata:** the `SubmissionFile::edit` listener above reacts to a new
+  file revision (`fileId` changed). Editing only an existing file's own
+  metadata (e.g. its name) does not trigger an `"updated"` webhook - none of
+  it is part of the payload.
 - **Deleting a galley's file does not trigger an update either:** OJS core
   works around a known bug ([pkp/pkp-lib#5740](https://github.com/pkp/pkp-lib/issues/5740))
   by nulling the galley's `submissionFileId` *in place* before calling

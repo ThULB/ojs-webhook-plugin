@@ -22,6 +22,7 @@ use PKP\observers\events\PublicationUnpublished;
 use PKP\plugins\GenericPlugin;
 use PKP\plugins\Hook;
 use PKP\submission\PKPSubmission;
+use PKP\submissionFile\SubmissionFile;
 
 class WebhookPlugin extends GenericPlugin
 {
@@ -157,6 +158,32 @@ class WebhookPlugin extends GenericPlugin
                 }
 
                 $this->handleGalleyChanged($newGalley->getData('publicationId'));
+            });
+
+            Hook::add('SubmissionFile::edit', function (string $hookName, array $args) {
+                /** @var SubmissionFile $newSubmissionFile */
+                $newSubmissionFile = $args[0];
+                /** @var SubmissionFile $oldSubmissionFile */
+                $oldSubmissionFile = $args[1];
+
+                // Replacing a galley's PDF via the galley grid's "Upload file" action uploads a new
+                // *revision* of the galley's existing submission file: only its `fileId` changes, the
+                // galley keeps pointing at the same submissionFileId, so Galley::edit never fires.
+                // MetadataChanged only follows if the editor also completes the upload wizard's
+                // metadata step - catch the replacement here instead.
+                if (
+                    $newSubmissionFile->getData('assocType') !== Application::ASSOC_TYPE_REPRESENTATION
+                    || (int) $newSubmissionFile->getData('fileId') === (int) $oldSubmissionFile->getData('fileId')
+                ) {
+                    return;
+                }
+
+                $galley = Repo::galley()->get((int) $newSubmissionFile->getData('assocId'));
+                if (!$galley || (int) $galley->getData('submissionFileId') !== (int) $newSubmissionFile->getId()) {
+                    return;
+                }
+
+                $this->handleGalleyChanged($galley->getData('publicationId'));
             });
 
             Hook::add('Publication::validatePublish', function (string $hookName, array $args) {

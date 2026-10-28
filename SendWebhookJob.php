@@ -30,6 +30,18 @@ class SendWebhookJob extends BaseJob
      */
     public $tries = 5;
 
+    /**
+     * BaseJob caps failures at 3 thrown exceptions regardless of $tries - every retry here is
+     * triggered by a thrown exception, so without raising this too the job would fail for good after
+     * the third attempt and never reach the 10/30 minute backoffs.
+     */
+    public int $maxExceptions = 5;
+
+    /**
+     * Above CURLOPT_TIMEOUT, so the worker never kills a job that is still waiting for its answer.
+     */
+    public int $timeout = 90;
+
     public function backoff(): array
     {
         return [30, 120, 600, 1800];
@@ -159,7 +171,11 @@ class SendWebhookJob extends BaseJob
             CURLOPT_HTTPHEADER => $headers,
             CURLOPT_USERAGENT => "OJS-Webhook-Plugin/{$this->pluginVersion} (+https://github.com/ThULB/ojs-webhook-plugin)",
             CURLOPT_CONNECTTIMEOUT => 5,
-            CURLOPT_TIMEOUT => 15,
+            // The Zeitschriftenserver imports one article at a time and waits up to 60s for its
+            // turn before answering 503 itself - after an issue is published, requests queue up
+            // there. Wait longer than that, so its own answer decides; a shorter timeout here
+            // would give up on (and later re-send) requests it is still working on.
+            CURLOPT_TIMEOUT => 75,
             // Defense in depth: WebhookPlugin/WebhookSettingsForm already restrict
             // the configured URL to http(s), but enforce it here too in case that
             // check is ever bypassed (e.g. a value written directly to the DB).
@@ -308,7 +324,11 @@ class SendWebhookJob extends BaseJob
                 'id' => $galley->getId(),
                 'label' => $galley->getLabel(),
                 'mimeType' => $submissionFile?->getData('mimetype'),
-                'fileId' => $submissionFileId,
+                // The file *revision*, not the submission file: replacing a galley's PDF uploads a
+                // new revision of the same submission file, so only this id changes - and it is
+                // what the receiving end compares to decide whether to fetch the file again.
+                'fileId' => $submissionFile?->getData('fileId'),
+                'submissionFileId' => $submissionFileId,
                 'url' => $request->getDispatcher()->url($request, Application::ROUTE_PAGE, $journalPath, 'article', 'download', [$this->submissionId, $galley->getId()]),
             ];
         }
