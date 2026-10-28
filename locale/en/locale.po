@@ -41,6 +41,12 @@ msgstr "Webhook secret (optional)"
 msgid "plugins.generic.webhook.settings.webhookSecret.description"
 msgstr "If set, each request is signed with this value (HMAC-SHA256 over the request body) in the X-Webhook-Signature header, so the receiving endpoint can verify the request came from this journal and was not tampered with. The secret itself is never sent."
 
+msgid "plugins.generic.webhook.settings.webhookSecret.isSet"
+msgstr "A secret is currently set. It is not displayed; leave the field empty to keep it, or enter a new one to replace it."
+
+msgid "plugins.generic.webhook.settings.webhookSecret.clear"
+msgstr "Remove the current secret (requests will no longer be signed)"
+
 msgid "plugins.generic.webhook.settings.requireDoiBeforePublish"
 msgstr "Do not allow publishing a submission until a DOI has been recorded for it (e.g. from a prior webhook response)."
 

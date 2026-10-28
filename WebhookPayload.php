@@ -57,6 +57,27 @@ class WebhookPayload
     }
 
     /**
+     * Whether a non-2xx HTTP status from the webhook endpoint is worth retrying with backoff:
+     *
+     * - 5xx: the Zeitschriftenserver could not say for sure whether the article already exists
+     *   yet - safe and necessary to retry, since its endpoint is idempotent.
+     * - 0: no status at all, e.g. a connection dropped mid-response without curl reporting its
+     *   own errno.
+     * - 408 Request Timeout, 425 Too Early, 429 Too Many Requests: client errors by number, but
+     *   transient by definition - e.g. a reverse proxy rate-limiting a bulk issue publish.
+     *
+     * Everything else (other 4xx, and 3xx - redirects are deliberately not followed, since a POST
+     * may turn into a GET on the way) means the request itself or the configured URL is wrong
+     * and needs fixing, not repeating.
+     */
+    public static function isRetryableStatus(int $statusCode): bool
+    {
+        return $statusCode === 0
+            || $statusCode >= 500
+            || in_array($statusCode, [408, 425, 429], true);
+    }
+
+    /**
      * Reduce a decoded 2xx response body to the fields SendWebhookJob uses, each of a known type:
      * `doi`/`id`/`url` as non-empty strings or null, `warnings` as a list of `{code, detail}` with
      * a string `code`.

@@ -179,12 +179,10 @@ class SendWebhookJob extends BaseJob
         if ($statusCode < 200 || $statusCode >= 300) {
             $message = "Webhook returned HTTP {$statusCode} for submission {$this->submissionId}: {$result}";
 
-            // A 5xx (or no status at all, e.g. a connection dropped mid-response without curl
-            // reporting its own errno) means the Zeitschriftenserver could not say for sure whether
-            // the article already exists yet, so it is safe - and necessary - to retry. Anything
-            // else (4xx) is a permanent client error: retrying the same request five times would
+            // Retry only what can resolve itself (see WebhookPayload::isRetryableStatus()); any other
+            // non-2xx is a permanent rejection of this exact request - retrying it five times would
             // never produce a different result, so fail immediately instead of exhausting $tries.
-            if ($statusCode >= 500 || $statusCode === 0) {
+            if (WebhookPayload::isRetryableStatus($statusCode)) {
                 throw new \Exception($message);
             }
 
@@ -343,7 +341,9 @@ class SendWebhookJob extends BaseJob
         $existingDoiId = $publication->getData('doiId');
         if ($existingDoiId) {
             $existingDoi = Repo::doi()->get($existingDoiId);
-            if ($existingDoi && $existingDoi->getData('doi') === $doi) {
+            // DOIs are case-insensitive (DOI Handbook 2.4), so a different letter case is the
+            // same DOI, not a conflict.
+            if ($existingDoi && strcasecmp((string) $existingDoi->getData('doi'), $doi) === 0) {
                 return;
             }
 

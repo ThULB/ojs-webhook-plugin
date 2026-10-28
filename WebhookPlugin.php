@@ -132,6 +132,14 @@ class WebhookPlugin extends GenericPlugin
             Hook::add('Galley::add', function (string $hookName, array $args) {
                 /** @var Galley $galley */
                 $galley = $args[0];
+
+                // The galley form creates a file-based galley without its file; the upload that
+                // follows sets submissionFileId through Galley::edit, which sends the webhook then.
+                // Reacting here as well would send one "updated" with an incomplete galley first.
+                if (!$galley->getData('submissionFileId') && !$galley->getData('urlRemote')) {
+                    return;
+                }
+
                 $this->handleGalleyChanged($galley->getData('publicationId'));
             });
 

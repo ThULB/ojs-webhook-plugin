@@ -55,7 +55,9 @@ class WebhookSettingsForm extends Form
     {
         $contextId = $this->getContextId();
         $this->setData('webhookUrl', $this->plugin->getSetting($contextId, 'webhookUrl'));
-        $this->setData('webhookSecret', $this->plugin->getSetting($contextId, 'webhookSecret'));
+        // Only whether a secret is set - the secret itself is never sent back to the browser, so it
+        // can't be read off the settings page (or a screenshot of it) and used to forge signatures.
+        $this->setData('webhookSecretIsSet', (bool) $this->plugin->getSetting($contextId, 'webhookSecret'));
         $this->setData('requireDoiBeforePublish', (bool) $this->plugin->getSetting($contextId, 'requireDoiBeforePublish'));
         parent::initData();
     }
@@ -65,7 +67,7 @@ class WebhookSettingsForm extends Form
      */
     public function readInputData()
     {
-        $this->readUserVars(['webhookUrl', 'webhookSecret', 'requireDoiBeforePublish']);
+        $this->readUserVars(['webhookUrl', 'webhookSecret', 'clearWebhookSecret', 'requireDoiBeforePublish']);
     }
 
     /**
@@ -85,7 +87,16 @@ class WebhookSettingsForm extends Form
     {
         $contextId = $this->getContextId();
         $this->plugin->updateSetting($contextId, 'webhookUrl', trim((string) $this->getData('webhookUrl')));
-        $this->plugin->updateSetting($contextId, 'webhookSecret', trim((string) $this->getData('webhookSecret')) ?: null);
+
+        // The secret field is never pre-filled (see initData()), so an empty submission means
+        // "keep the current secret"; removing it takes the explicit checkbox instead.
+        $webhookSecret = trim((string) $this->getData('webhookSecret'));
+        if ($webhookSecret !== '') {
+            $this->plugin->updateSetting($contextId, 'webhookSecret', $webhookSecret);
+        } elseif ($this->getData('clearWebhookSecret')) {
+            $this->plugin->updateSetting($contextId, 'webhookSecret', null);
+        }
+
         $this->plugin->updateSetting($contextId, 'requireDoiBeforePublish', (bool) $this->getData('requireDoiBeforePublish'));
 
         $request = Application::get()->getRequest();

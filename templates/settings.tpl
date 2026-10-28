@@ -22,8 +22,14 @@
 			{fbvElement type="text" id="webhookUrl" value=$webhookUrl maxlength="255"}
 		{/fbvFormSection}
 		{fbvFormSection title="plugins.generic.webhook.settings.webhookSecret" description="plugins.generic.webhook.settings.webhookSecret.description"}
-			{fbvElement type="text" id="webhookSecret" value=$webhookSecret maxlength="255"}
+			{* Never rendered back into the page: the field stays empty and an empty submission keeps the stored secret (see WebhookSettingsForm::execute()). *}
+			{fbvElement type="text" password=true id="webhookSecret" value="" maxlength="255" autocomplete="new-password"}
 		{/fbvFormSection}
+		{if $webhookSecretIsSet}
+			{fbvFormSection list="true" description="plugins.generic.webhook.settings.webhookSecret.isSet"}
+				{fbvElement type="checkbox" id="clearWebhookSecret" checked=false label="plugins.generic.webhook.settings.webhookSecret.clear"}
+			{/fbvFormSection}
+		{/if}
 		{fbvFormSection list="true"}
 			{fbvElement type="checkbox" id="requireDoiBeforePublish" checked=$requireDoiBeforePublish label="plugins.generic.webhook.settings.requireDoiBeforePublish"}
 		{/fbvFormSection}

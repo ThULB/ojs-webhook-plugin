@@ -14,7 +14,7 @@ time.
    | `DecisionAdded`         | A submission receives the editorial decision `Decision::SEND_TO_PRODUCTION` ("Send to Production") | `"production"` |
    | `PublicationPublished`  | A publication transitions from *not published* to *published* (`oldPublication.status !== PUBLISHED && publication.status === PUBLISHED`). Re-saving an already-published article does **not** trigger another webhook. | `"published"`  |
    | `MetadataChanged`       | A submission's metadata is saved, **and** the Zeitschriftenserver has accepted this publication at least once before (a `zsId` is on record for it - not `doiId`, since the Zeitschriftenserver may have accepted the submission without being able to mint a DOI yet). Skipped if a `"published"` webhook for the same publication was already dispatched earlier in the same request, since OJS fires `MetadataChanged` again right after publishing. | `"updated"`    |
-   | `Galley::add` / `Galley::edit` | A galley is added, or edited with an actual change to its `label`, `locale`, `submissionFileId` or `urlRemote` (not e.g. a drag-and-drop reorder, which only changes `seq`), on an **already-published** publication with a `zsId` on record. Unlike the upload wizard's `saveMetadata()` action, editing a galley this way does not fire `MetadataChanged` on its own (see "Known limitations"), so a corrected galley/PDF would otherwise never reach the Zeitschriftenserver. | `"updated"`    |
+   | `Galley::add` / `Galley::edit` | A galley is added (with its file or remote URL already set - a file-based galley created through the galley form gets its file only on the following upload, which is then caught as an edit), or edited with an actual change to its `label`, `locale`, `submissionFileId` or `urlRemote` (not e.g. a drag-and-drop reorder, which only changes `seq`), on an **already-published** publication with a `zsId` on record. Unlike the upload wizard's `saveMetadata()` action, editing a galley this way does not fire `MetadataChanged` on its own (see "Known limitations"), so a corrected galley/PDF would otherwise never reach the Zeitschriftenserver. | `"updated"`    |
    | `PublicationUnpublished`| A publication is unpublished                                        | `"unpublished"`|
 
    A newly published version of an already-published submission does not
@@ -78,7 +78,8 @@ time.
    Each entry in `galleys` carries `id`, `label`, `mimeType`, `fileId` and
    `url` (the article download URL).
 4. If the response body contains a `doi` field, the job records it on the
-   publication (`Repo::doi()->add()` + `doiId`) unless a *different* DOI is
+   publication (`Repo::doi()->add()` + `doiId`) unless a *different* DOI
+   (compared case-insensitively, as DOIs are) is
    already set there, in which case the mismatch is logged instead of
    silently overwritten. The publication is re-read right before recording
    the DOI, since `Repo::publication()->edit()` writes back every field of
@@ -90,12 +91,14 @@ time.
    the request was already delivered, so failing would only make the queue
    re-send it.
 5. `SendWebhookJob` retries up to 5 times (30s / 2min / 10min / 30min
-   backoff) on a network error or a `5xx` response, since the
+   backoff) on a network error, a `5xx` response, or one of the transient
+   `408`/`425`/`429` responses (`WebhookPayload::isRetryableStatus()`), since the
    Zeitschriftenserver endpoint is idempotent per `submissionId`/
    `publicationId`, tolerates repeated requests, and returns `5xx` precisely
    when it cannot yet say whether the article already exists. Any other
-   non-2xx response (`4xx`) is treated as permanent - the request fails
-   immediately instead of retrying the same rejected request five times.
+   non-2xx response (other `4xx`, and `3xx` - redirects are not followed) is
+   treated as permanent - the request fails immediately instead of retrying
+   the same rejected request five times.
    Before every attempt, the job checks whether its event has been overtaken
    by the publication's current state (`WebhookEventGuard`) and, if so,
    drops it without sending or recording anything: a `published` (or
@@ -129,7 +132,7 @@ Settings are stored per journal (context).
 | Field                       | Required | Description                                                      |
 |-----------------------------|----------|-------------------------------------------------------------------|
 | Webhook URL                 | no*      | Target URL for the `POST` request. `http://localhost:<port>/...` is accepted for local development. May be left empty to reset the configuration (see below). For a Zeitschriftenserver (MyCoRe) endpoint, this includes that journal's own journal ID (e.g. `.../rsc/ojs/jportal_jpjournal_00002373`). |
-| Webhook Secret              | no       | Used to sign each request (`X-Webhook-Signature` header); see "How it works" above. |
+| Webhook Secret              | no       | Used to sign each request (`X-Webhook-Signature` header); see "How it works" above. Never displayed again once saved: the field stays empty, saving it empty keeps the current secret, and a separate checkbox removes it. |
 | Require DOI before publish  | no       | If checked, blocks publishing a submission until a DOI has been recorded for it (see `Publication::validatePublish` in "How it works"). |
 
 \* The field can be saved empty (e.g. to clear a previously configured URL),
@@ -280,6 +283,7 @@ webhook/
 ├── WebhookEventGuard.php       Pure check whether a queued event is outdated
 ├── SendWebhookJob.php          Async queue job for the HTTP POST
 ├── settings.xml                Install defaults (enabled = false)
+├── CHANGELOG.md                Release notes per version
 ├── version.xml                 Plugin version information
 ├── templates/settings.tpl      Smarty template for the settings form
 ├── templates/resend.tpl        Smarty template for the resend form

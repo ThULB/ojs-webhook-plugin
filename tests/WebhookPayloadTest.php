@@ -92,6 +92,29 @@ class WebhookPayloadTest extends TestCase
         );
     }
 
+    #[DataProvider('statusProvider')]
+    public function testIsRetryableStatus(int $statusCode, bool $expected): void
+    {
+        $this->assertSame($expected, WebhookPayload::isRetryableStatus($statusCode));
+    }
+
+    public static function statusProvider(): array
+    {
+        return [
+            'no status' => [0, true],
+            '301 redirect' => [301, false],
+            '400 bad request' => [400, false],
+            '401 unauthorized' => [401, false],
+            '404 not found' => [404, false],
+            '408 request timeout' => [408, true],
+            '422 unprocessable' => [422, false],
+            '425 too early' => [425, true],
+            '429 too many requests' => [429, true],
+            '500 internal server error' => [500, true],
+            '503 service unavailable' => [503, true],
+        ];
+    }
+
     #[DataProvider('responseProvider')]
     public function testNormalizeResponse(mixed $input, array $expected): void
     {
